@@ -27,4 +27,15 @@ public class Util {
         return NV21;
     }
 
+    public byte[] swapYV12toI420(byte[] yv12bytes, int width, int height) {
+        byte[] i420bytes = new byte[yv12bytes.length];
+        for (int i = 0; i < width*height; i++)
+            i420bytes[i] = yv12bytes[i];
+        for (int i = width*height; i < width*height + (width/2*height/2); i++)
+            i420bytes[i] = yv12bytes[i + (width/2*height/2)];
+        for (int i = width*height + (width/2*height/2); i < width*height + 2*(width/2*height/2); i++)
+            i420bytes[i] = yv12bytes[i - (width/2*height/2)];
+        return i420bytes;
+    }
+
 }

@@ -42,6 +42,10 @@ public class VideoChunks {
         notifyAll();
     }
 
+    public synchronized void clear(){
+        mChunks.clear();
+    }
+
     /**
      * Returns the number of chunks currently held.
      */

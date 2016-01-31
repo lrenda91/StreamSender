@@ -16,14 +16,14 @@ import it.polito.mad.websocket.AsyncClientImpl;
  * Created by luigi on 21/01/16.
  */
 @SuppressWarnings("deprecation")
-public class EncoderTask extends AsyncTask<Void, VideoChunks.Chunk, Void> {
+public class EncoderThread extends Thread implements Runnable {
 
-    public static abstract class Listener {
-        void onEncodedDataAvailable(byte[] data){}
+    public interface Listener {
+        void onEncodedDataAvailable(VideoChunks.Chunk chunk, boolean configBytes);
     }
 
     private static final String TAG = "ENCODER";
-    private static final boolean VERBOSE = true;
+    private static final boolean VERBOSE = false;
 
     //private static final int TIMEOUT_US = -1;
     private static final String MIME_TYPE = "video/avc";
@@ -34,7 +34,13 @@ public class EncoderTask extends AsyncTask<Void, VideoChunks.Chunk, Void> {
 
     private Listener mListener;
     private VideoChunks mRawFrames = new VideoChunks();
-    private int mWidth = 640, mHeight = 480;
+    private final int mWidth, mHeight;
+
+    public EncoderThread(int w, int h, Listener listener){
+        mWidth = w;
+        mHeight = h;
+        mListener = listener;
+    }
 
     public void setListener(Listener mListener) {
         this.mListener = mListener;
@@ -44,20 +50,24 @@ public class EncoderTask extends AsyncTask<Void, VideoChunks.Chunk, Void> {
         mRawFrames.addChunk(data, 0, 0);
     }
 
+    public void drain(){
+        mRawFrames.clear();
+    }
+
     @Override
-    protected Void doInBackground(Void... params) {
+    public void run() {
         MediaCodec encoder = null;
         MediaCodecInfo codecInfo = selectCodec(MIME_TYPE);
         if (codecInfo == null) {
             Log.e(TAG, "Unable to find an appropriate codec for " + MIME_TYPE);
-            return null;
+            return;
         }
-        Log.d(TAG, codecInfo.toString());
+        //Log.d(TAG, codecInfo.toString());
         int colorFormat = MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Planar;
-                //selectColorFormat(codecInfo, MIME_TYPE);
+        //selectColorFormat(codecInfo, MIME_TYPE);
         if (colorFormat == 0){
             Log.e(TAG,"couldn't find a good color format for " + codecInfo.getName() + " / " + MIME_TYPE);
-            return null;
+            return;
         }
 
         MediaFormat format = MediaFormat.createVideoFormat(MIME_TYPE, mWidth, mHeight);
@@ -73,7 +83,7 @@ public class EncoderTask extends AsyncTask<Void, VideoChunks.Chunk, Void> {
         }
         catch(IOException e){
             Log.e(TAG, "Unable to create an appropriate codec for " + MIME_TYPE);
-            return null;
+            return;
         }
 
         ByteBuffer[] encoderInputBuffers = encoder.getInputBuffers();
@@ -84,48 +94,54 @@ public class EncoderTask extends AsyncTask<Void, VideoChunks.Chunk, Void> {
         boolean outputDone = false;
         int inputStatus = -1, outputStatus = -1;
 
-        if (VERBOSE) Log.d(TAG, "Encoder starts...");
+        Log.d(TAG, "Encoder started");
         while (!outputDone) {
             if (!inputDone) {
                 //if (VERBOSE) Log.i(TAG, "Waiting for input buffer");
-                inputStatus = encoder.dequeueInputBuffer(-1);
+                inputStatus = encoder.dequeueInputBuffer(10000);
                 if (inputStatus < 0){
                     Log.e(TAG, "Unknown input buffer status: "+inputStatus);
                     continue;
                 }
+
                 long pts = computePresentationTime(framesCounter);
-                if (framesCounter == NUM_FRAMES) {
-                    // Send an empty frame with the end-of-stream flags set.  If we set EOS
-                    // on a frame with data, that frame data will be ignored, and the
-                    // output will be short one frame.
-                    encoder.queueInputBuffer(inputStatus, 0, 0, pts, MediaCodec.BUFFER_FLAG_END_OF_STREAM);
+                ByteBuffer inputBuf = encoderInputBuffers[inputStatus];
+                inputBuf.clear();
+                int bufferLength = 0;
+                int flags = 0;
+                if (VERBOSE) Log.d(TAG, "Waiting for new access unit from camera...");
+                VideoChunks.Chunk chunk = mRawFrames.getNextChunk();
+                if (chunk == null){
+                    if (VERBOSE) Log.d(TAG, "Cancelling thread...");
+                    flags = MediaCodec.BUFFER_FLAG_END_OF_STREAM;
                     inputDone = true;
                     if (VERBOSE) Log.d(TAG, "sent input EOS (with zero-length frame)");
+                    //break;
+                    encoder.queueInputBuffer(inputStatus, 0, bufferLength, pts, flags);
                 }
-                else {
-                    ByteBuffer inputBuf = encoderInputBuffers[inputStatus];
-                    inputBuf.clear();
-
-                    if (VERBOSE) Log.d(TAG, "Waiting for new access unit from camera...");
-                    VideoChunks.Chunk chunk = mRawFrames.getNextChunk();
-                    if (chunk == null){
-                        if (VERBOSE) Log.d(TAG, "Cancelling thread...");
-                        break;
-                    }
+                else{
                     byte[] previewData = chunk.data;
+                    if (inputBuf.remaining() >= previewData.length) {
 
-                    inputBuf.put(previewData);
-                    encoder.queueInputBuffer(inputStatus, 0, previewData.length, pts, 0);
-                    if (VERBOSE) Log.d(TAG, "submitted frame " + framesCounter);
+                        bufferLength = previewData.length;
+                        Log.d(TAG, "buf remaining()=" + inputBuf.remaining() + " byte[] size=" + previewData.length);
+                        inputBuf.put(previewData);
+                        encoder.queueInputBuffer(inputStatus, 0, bufferLength, pts, flags);
+                    }
                 }
+
+                //encoder.queueInputBuffer(inputStatus, 0, bufferLength, pts, flags);
+
                 framesCounter++;
             }
 
             MediaCodec.BufferInfo info = new MediaCodec.BufferInfo();
             if (VERBOSE) Log.i(TAG, "Waiting for output buffer");
-            outputStatus = encoder.dequeueOutputBuffer(info, -1);
-
-            if (outputStatus == MediaCodec.INFO_OUTPUT_BUFFERS_CHANGED) {
+            outputStatus = encoder.dequeueOutputBuffer(info, 10000);
+            if (outputStatus == MediaCodec.INFO_TRY_AGAIN_LATER){
+                continue;
+            }
+            else if (outputStatus == MediaCodec.INFO_OUTPUT_BUFFERS_CHANGED) {
                 encoderOutputBuffers = encoder.getOutputBuffers();
                 if (VERBOSE) Log.d(TAG, "encoder output buffers changed");
             } else if (outputStatus == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
@@ -148,8 +164,12 @@ public class EncoderTask extends AsyncTask<Void, VideoChunks.Chunk, Void> {
                 encodedData.get(encodedArray);
                 VideoChunks.Chunk c =
                         new VideoChunks.Chunk(encodedArray, info.flags, info.presentationTimeUs);
-                publishProgress(c);
-                Log.d(TAG, "Published chunk # "+framesCounter+" to decoder");
+
+                boolean isConfigData = ((c.flags & MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0);
+                if (mListener != null) mListener.onEncodedDataAvailable(c, isConfigData);
+                //publishProgress(c);
+
+                //Log.d(TAG, "Published chunk # "+framesCounter+" to decoder");
 
 
                 if (VERBOSE) Log.d(TAG, "Encoded buffer size: "+info.size+" " +
@@ -158,14 +178,14 @@ public class EncoderTask extends AsyncTask<Void, VideoChunks.Chunk, Void> {
                     if (VERBOSE) Log.i(TAG, "First coded packet ");
                 } else {
                     outputDone = (info.flags & MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0;
+                    if (VERBOSE) if (outputDone) Log.i(TAG, "Last coded packet ");
                 }
                 encoder.releaseOutputBuffer(outputStatus, false);
             }
         }
         encoder.stop();
         encoder.release();
-        Log.i(TAG, "Encoder Released!! Closing...");
-        return null;
+        Log.i(TAG, "Encoder Released!! Closing.");
     }
 
 

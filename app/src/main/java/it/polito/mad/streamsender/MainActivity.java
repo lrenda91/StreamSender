@@ -3,7 +3,6 @@ package it.polito.mad.streamsender;
 import android.content.Context;
 import android.graphics.ImageFormat;
 import android.hardware.Camera;
-import android.media.MediaCodec;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
@@ -17,37 +16,41 @@ import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.Toast;
 
-import com.neovisionaries.ws.client.WebSocket;
-import com.neovisionaries.ws.client.WebSocketException;
-import com.neovisionaries.ws.client.WebSocketFactory;
-
 import java.io.IOException;
+import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
-import java.util.Random;
 
 import it.polito.mad.websocket.AsyncClientImpl;
 
 @SuppressWarnings("deprecation")
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity
+        implements EncoderThread.Listener {
 
     private static final String TAG = "PREVIEW";
 
-    private Button rec, pause, stop, connect;
+    private static final int sRatioWidth = 4;
+    private static final int sRatioHeight = 3;
+    private static final int sImageFormat = ImageFormat.YV12;
+
+    private Button rec, pause, stop, connect, switchQuality;
     private EditText mIP, mPort;
+    //private FrameLayout mContainer;
     private SurfaceView mCameraView;
     private int mRotation;
 
     private static final int mNumOfBuffers = 3;
-    private int mWidth = 640;
-    private int mHeigth = 480;
+    private int mWidth;
+    private int mHeight;
 
     private byte[][] buffers;
     private int idx = 0;
 
     private Camera mCamera;
+    private List<Camera.Size> mSuitableSizes;
+    private int mSupportedSizesIndex = 0;
 
-    private EncoderTask mEncoderTask;
+    //private EncoderTask mEncoderTask;
+    private EncoderThread mEncoderThread;
 
     private AsyncClientImpl mClient = new AsyncClientImpl(new AsyncClientImpl.Listener() {
         @Override
@@ -63,24 +66,16 @@ public class MainActivity extends AppCompatActivity {
 
         }
     });
-    public byte[] swapYV12toI420(byte[] yv12bytes, int width, int height) {
-        byte[] i420bytes = new byte[yv12bytes.length];
-        for (int i = 0; i < width*height; i++)
-            i420bytes[i] = yv12bytes[i];
-        for (int i = width*height; i < width*height + (width/2*height/2); i++)
-            i420bytes[i] = yv12bytes[i + (width/2*height/2)];
-        for (int i = width*height + (width/2*height/2); i < width*height + 2*(width/2*height/2); i++)
-            i420bytes[i] = yv12bytes[i - (width/2*height/2)];
-        return i420bytes;
-    }
 
     private Camera.PreviewCallback mPreviewCallback = new Camera.PreviewCallback() {
         @Override
         public void onPreviewFrame(byte[] data, Camera camera) {
-            mEncoderTask.submitAccessUnit(swapYV12toI420(data, mWidth, mHeigth));
+            mEncoderThread.submitAccessUnit(Util.swapNV21_UV(data));
+            //mEncoderTask.submitAccessUnit(Util.swapNV21_UV(data));
+
             camera.addCallbackBuffer(buffers[idx]);
             idx = (idx+1) % mNumOfBuffers;
-            Log.d(TAG, "data["+data.length+"]");
+            //Log.d(TAG, "data["+data.length+"]");
         }
     };
 
@@ -89,18 +84,19 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        buffers = new byte[mNumOfBuffers][mWidth * mHeigth * 3 / 2];
-
         rec = (Button) findViewById(R.id.button_rec);
         pause = (Button) findViewById(R.id.button_pause);
         stop = (Button) findViewById(R.id.button_stop);
         connect = (Button) findViewById(R.id.button_connect);
+        switchQuality = (Button) findViewById(R.id.button_quality_switch);
         mIP = (EditText) findViewById(R.id.ip);
         mPort = (EditText) findViewById(R.id.port);
 
         mCameraView = new SurfaceView(this);
         WindowManager wm = (WindowManager) getSystemService(Context.WINDOW_SERVICE);
         mRotation = wm.getDefaultDisplay().getRotation();
+
+        //mCameraView.getHolder().setSizeFromLayout();
         mCameraView.getHolder().addCallback(new SurfaceHolder.Callback() {
             @Override
             public void surfaceCreated(SurfaceHolder holder) {
@@ -125,12 +121,13 @@ public class MainActivity extends AppCompatActivity {
                             mCamera.setDisplayOrientation(180);
                             break;
                     }
-                    mCamera.addCallbackBuffer(buffers[idx]);
-                    //mCamera.setPreviewCallbackWithBuffer(mPreviewCallback);
+                    //mCamera.addCallbackBuffer(buffers[idx]);
+
                     Camera.Parameters parameters = mCamera.getParameters();
-                    String logSuppFormats = "Supported formats: [ ";
-                    for (int f : parameters.getSupportedPreviewFormats()){
-                        switch(f){
+
+                    String logSuppFormats = "Supported preview formats: ";
+                    for (int f : parameters.getSupportedPreviewFormats()) {
+                        switch (f) {
                             case ImageFormat.NV21:
                                 logSuppFormats += "NV21 ";
                                 break;
@@ -138,12 +135,12 @@ public class MainActivity extends AppCompatActivity {
                                 logSuppFormats += "YV12 ";
                                 break;
                             default:
-                                logSuppFormats += f+" ";
+                                logSuppFormats += f + " ";
                         }
                     }
                     Log.d(TAG, logSuppFormats);
-                    parameters.setPreviewFormat(ImageFormat.YV12);
-                    parameters.setPreviewSize(mWidth, mHeigth);
+                    parameters.setPreviewFormat(sImageFormat);
+                    parameters.setPreviewSize(mWidth, mHeight);
                     mCamera.setParameters(parameters);
                     mCamera.setPreviewDisplay(holder);
                     mCamera.startPreview();
@@ -161,7 +158,9 @@ public class MainActivity extends AppCompatActivity {
         rec.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                initializeEncoderThread().execute();
+                initializeEncoderThread();//.execute();
+                mEncoderThread.start();
+
                 mCamera.setPreviewCallbackWithBuffer(mPreviewCallback);
                 mCamera.startPreview();
             }
@@ -175,7 +174,14 @@ public class MainActivity extends AppCompatActivity {
         stop.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                mEncoderTask.cancel(true);
+
+                mEncoderThread.interrupt();
+                try{
+                    mEncoderThread.join();
+                }catch(InterruptedException e){}
+                mEncoderThread = null;
+                //mEncoderTask.cancel(true);
+
                 mCamera.setPreviewCallback(null);
                 mCamera.stopPreview();
                 mClient.closeConnection();
@@ -189,42 +195,76 @@ public class MainActivity extends AppCompatActivity {
                 mClient.connect(ip, port, 2000);
             }
         });
+        switchQuality.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                nextQuality();
+            }
+        });
+
 
 
         initializeEncoderThread();
 
-        FrameLayout container = (FrameLayout) findViewById(R.id.preview);
-        container.addView(mCameraView);
-
+        FrameLayout mContainer = (FrameLayout) findViewById(R.id.preview);
+        mContainer.addView(mCameraView);
 
     }
 
+    private void initializeEncoderThread(){
+        mEncoderThread = new EncoderThread(mWidth, mHeight, this);
+    }
 
+    @Override
+    public void onEncodedDataAvailable(VideoChunks.Chunk chunk, boolean configBytes) {
+        if (mClient.getSocket() == null) return;
+        if (configBytes){
+            mClient.sendConfigBytes(chunk.data);
+        }
+        else{
+            mClient.sendStreamBytes(chunk);
+        }
+    }
 
-    private EncoderTask initializeEncoderThread(){
-        mEncoderTask = new EncoderTask(){
-            @Override
-            protected void onProgressUpdate(VideoChunks.Chunk... values) {
-                VideoChunks.Chunk c = values[0];
-                if ((c.flags & MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0){
-                    //first packet
-                    String s = "[";
-                    for (int i=0;i<c.data.length;i++) s += c.data[i]+" ";
-                    s+="]";
-                    Log.d(TAG, s);
-                    mClient.sendConfigBytes(c.data);
-                }
-                else{
-                    mClient.sendStreamBytes(c);
-                }
+    /*
+            private EncoderTask initializeEncoderThread(){
+                mEncoderTask = new EncoderTask(){
+                    @Override
+                    protected void onProgressUpdate(VideoChunks.Chunk... values) {
+                        VideoChunks.Chunk c = values[0];
+                        if ((c.flags & MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0){
+                            //first packet
+                            String s = "[";
+                            for (int i=0;i<c.data.length;i++) s += c.data[i]+" ";
+                            s+="]";
+                            Log.d(TAG, s);
+                            mClient.sendConfigBytes(c.data);
+                        }
+                        else{
+                            mClient.sendStreamBytes(c);
+                        }
+                    }
+
+                    @Override
+                    protected void onPostExecute(Void aVoid) {
+                        //initializeEncoderThread().execute();
+                    }
+                };
+                return mEncoderTask;
             }
-        };
-        return mEncoderTask;
-    }
-
+        */
     public void acquireCamera() {
         try {
             mCamera = Camera.open(0);
+            mSuitableSizes = new LinkedList<>();
+            for (Camera.Size s : mCamera.getParameters().getSupportedPreviewSizes()){
+                if ((s.width * sRatioHeight / sRatioWidth) == s.height){
+                    if (s.width < 700)
+                    mSuitableSizes.add(s);
+                }
+            }
+            nextQuality();
+
         } catch (Exception e) {
             Log.e("CAMERA", e.getMessage());
             throw new RuntimeException(e);
@@ -249,6 +289,65 @@ public class MainActivity extends AppCompatActivity {
     public void onPause() {
         releaseCamera();
         super.onPause();
+    }
+
+    private void nextQuality(){
+
+        //pause, so no other chunks will be added, then request encoder closure
+        mCamera.setPreviewCallbackWithBuffer(null);
+        mEncoderThread.interrupt();
+
+        Camera.Size current = mSuitableSizes.get(mSupportedSizesIndex);
+        switchQuality.setText(current.width+"x"+current.height);
+        mWidth = current.width;
+        mHeight = current.height;
+
+        float bitsPerPixel = (float) ImageFormat.getBitsPerPixel(sImageFormat);
+        float bytesPerPixel = bitsPerPixel / 8F;
+        float bufferSize = mWidth * mHeight * bytesPerPixel;
+        if (bufferSize != ((int) bufferSize)){
+            //for instance if (mWidth * mHeight *bytesPerPixel) is equals to 76800.5
+            //lets consider it 76801.5 so when it's casted it becomes equals to 76801!!
+            bufferSize++;
+            Log.e(TAG, "Not integer size: "+bytesPerPixel);
+        }
+
+        buffers = new byte[mNumOfBuffers][(int)bufferSize];
+        Log.d(TAG, "new preview size="+current.width+"x"+current.height+" ; new buffers size= "+buffers[0].length);
+
+        Camera.Parameters parameters = mCamera.getParameters();
+        parameters.setPreviewSize(mWidth, mHeight);
+        mCamera.setParameters(parameters);
+
+        try {
+            mCamera.setPreviewDisplay(mCameraView.getHolder());
+        }
+        catch(IOException e){
+            Toast.makeText(this, "Next quality: "+e.getMessage(), Toast.LENGTH_LONG).show();
+        }
+
+        mSupportedSizesIndex = (mSupportedSizesIndex + 1) % mSuitableSizes.size();
+
+        try{
+            mEncoderThread.join();
+            Thread.sleep(100);
+        }catch(InterruptedException e){}
+        Log.d(TAG, "Encoder thread finished");
+
+        //now, encoder thread has finished.
+        //------------- BUT ------------
+        //CHUNKS LIST MAY STILL CONTAIN SOME CHUNKS WITH 'OLD' SIZE
+        //WE MUST EMPTY IT
+        mEncoderThread.drain();
+
+        mCamera.addCallbackBuffer(buffers[idx]);
+        idx = (idx+1) % mNumOfBuffers;
+        mCamera.setPreviewCallbackWithBuffer(mPreviewCallback);
+
+        Log.d(TAG, "CLEARED");
+        initializeEncoderThread();
+        mEncoderThread.start();
+        Log.d(TAG, "RESTARTED");
     }
 
 }

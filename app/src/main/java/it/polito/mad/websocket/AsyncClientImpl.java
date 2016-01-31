@@ -63,6 +63,7 @@ public class AsyncClientImpl extends AbstractWSClient {
                     String uri = "ws://" + serverIP + ":" + port;
                     mWebSocket = new WebSocketFactory().createSocket(uri, timeout);
                     mWebSocket.addListener(AsyncClientImpl.this);
+
                     mWebSocket.connect();
                     if (VERBOSE) Log.d(TAG, "Successfully connected to " + uri);
                 } catch (final Exception e) {
@@ -121,7 +122,7 @@ public class AsyncClientImpl extends AbstractWSClient {
         try {
             JSONObject configMsg = JSONMessageFactory.createConfigMessage(configData);
             mWebSocket.sendText(configMsg.toString());
-            String base64 = configMsg.getString(JSONMessageFactory.DATA_KEY);
+            //String base64 = configMsg.getString(JSONMessageFactory.DATA_KEY);
 
         } catch (JSONException e) {
 
