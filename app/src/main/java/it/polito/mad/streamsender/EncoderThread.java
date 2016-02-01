@@ -4,19 +4,16 @@ import android.media.MediaCodec;
 import android.media.MediaCodecInfo;
 import android.media.MediaCodecList;
 import android.media.MediaFormat;
-import android.os.AsyncTask;
 import android.util.Log;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
-import it.polito.mad.websocket.AsyncClientImpl;
-
 /**
  * Created by luigi on 21/01/16.
  */
 @SuppressWarnings("deprecation")
-public class EncoderThread extends Thread implements Runnable {
+public class EncoderThread implements Runnable {
 
     public interface Listener {
         void onEncodedDataAvailable(VideoChunks.Chunk chunk, boolean configBytes);
@@ -32,14 +29,48 @@ public class EncoderThread extends Thread implements Runnable {
     private static final int BIT_RATE_BPS = 500000;
     private static final long NUM_FRAMES = -1;
 
+    private Thread mWorkerThread;
     private Listener mListener;
     private VideoChunks mRawFrames = new VideoChunks();
-    private final int mWidth, mHeight;
+    private int mWidth, mHeight;
 
-    public EncoderThread(int w, int h, Listener listener){
+    public EncoderThread(Listener listener){
+        mListener = listener;
+    }
+
+    public void startThread(int w, int h){
+        if (mWorkerThread != null){
+            return;
+        }
         mWidth = w;
         mHeight = h;
-        mListener = listener;
+        mWorkerThread = new Thread(this);
+        mWorkerThread.start();
+    }
+
+    public void requestStop(){
+        if (mWorkerThread == null){
+            return;
+        }
+        mWorkerThread.interrupt();
+    }
+
+    public boolean waitForTermination(){
+        if (mWorkerThread == null){
+            return true;
+        }
+        boolean result = true;
+        try{
+            mWorkerThread.join();
+        } catch(InterruptedException e){
+            result = false;
+        }
+        mWorkerThread = null;
+        return result;
+    }
+
+    public boolean isRunning(){
+        return mWorkerThread != null;
     }
 
     public void setListener(Listener mListener) {
@@ -63,7 +94,9 @@ public class EncoderThread extends Thread implements Runnable {
             return;
         }
         //Log.d(TAG, codecInfo.toString());
-        int colorFormat = MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Planar;
+        int colorFormat = Util.getEncoderColorFormat(MainActivity.sImageFormat);
+        Util.logColorFormat(TAG, colorFormat);
+        //int colorFormat = MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Flexible;
         //selectColorFormat(codecInfo, MIME_TYPE);
         if (colorFormat == 0){
             Log.e(TAG,"couldn't find a good color format for " + codecInfo.getName() + " / " + MIME_TYPE);
@@ -116,7 +149,6 @@ public class EncoderThread extends Thread implements Runnable {
                     flags = MediaCodec.BUFFER_FLAG_END_OF_STREAM;
                     inputDone = true;
                     if (VERBOSE) Log.d(TAG, "sent input EOS (with zero-length frame)");
-                    //break;
                     encoder.queueInputBuffer(inputStatus, 0, bufferLength, pts, flags);
                 }
                 else{

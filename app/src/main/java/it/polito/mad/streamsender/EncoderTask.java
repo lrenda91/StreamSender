@@ -10,8 +10,6 @@ import android.util.Log;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
-import it.polito.mad.websocket.AsyncClientImpl;
-
 /**
  * Created by luigi on 21/01/16.
  */
