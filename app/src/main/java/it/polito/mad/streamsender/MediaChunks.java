@@ -10,13 +10,15 @@ import java.util.LinkedList;
  * the information about chunk boundaries.  This class stores the encoded data in memory,
  * retaining the chunk organization.
  */
-public class VideoChunks {
+public class MediaChunks {
 
     public static class Chunk {
+        public boolean isAudio;
         public final byte[] data;
         public final int flags;
         public final long presentationTimestampUs;
-        public Chunk(byte[] data, int flags, long presentationTimestampUs){
+        public Chunk(boolean audio, byte[] data, int flags, long presentationTimestampUs){
+            this.isAudio = audio;
             this.data = data;
             this.flags = flags;
             this.presentationTimestampUs = presentationTimestampUs;
@@ -26,11 +28,11 @@ public class VideoChunks {
     private final int mMaxSize = 100;
     private LinkedList<Chunk> mChunks = new LinkedList<>();
 
-    public synchronized void addChunk(byte[] data, int flags, long time) {
+    public synchronized void addChunk(boolean audio, byte[] data, int flags, long time) {
         //if (mChunks.size() == mMaxSize){
          //   mChunks.removeFirst();
         //}
-        mChunks.addLast(new Chunk(data, flags, time));
+        mChunks.addLast(new Chunk(audio, data, flags, time));
         notifyAll();
     }
 
@@ -61,7 +63,7 @@ public class VideoChunks {
             catch (InterruptedException e){
                 /**
                  * IMPORTANT: this exception will be thrown when cancel() is called
-                 * on the AsyncTask which called this function, i.e. when interrupt()
+                 * on the AsyncTask which called this function, or when interrupt()
                  * is called on the calling thread
                  */
                 notifyAll();

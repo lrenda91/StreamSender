@@ -5,9 +5,7 @@ import android.util.Base64;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.io.UnsupportedEncodingException;
-
-import it.polito.mad.streamsender.VideoChunks;
+import it.polito.mad.streamsender.MediaChunks;
 
 /**
  * Created by luigi on 24/01/16.
@@ -24,6 +22,8 @@ public class JSONMessageFactory {
     /*private static final String CONFIG_TYPE_VALUE = "config";
     private static final String STREAM_TYPE_VALUE = "stream";
     private static final String RESET_TYPE_VALUE = "reset";*/
+    private static final String VIDEO_TYPE_VALUE = "video";
+    private static final String AUDIO_TYPE_VALUE = "audio";
 
     private JSONMessageFactory(){}
 
@@ -33,12 +33,11 @@ public class JSONMessageFactory {
         return msg;
     }
 
-    public static JSONObject createConfigMessage(byte[] configData) throws JSONException {
+    public static JSONObject createConfigMessage(boolean audio, byte[] configData) throws JSONException {
         JSONObject msg = get();
-        msg.put(TYPE_KEY, "config");
+        msg.put(TYPE_KEY, "config-" + (audio ? "audio" : "video"));
         String base64 = Base64.encodeToString(configData, Base64.DEFAULT);
         try {
-            //msg[data] = Buffer() in javascript
             msg.put(DATA_KEY, base64);
         }
         catch(Exception e){
@@ -47,9 +46,10 @@ public class JSONMessageFactory {
         return msg;
     }
 
-    public static JSONObject createStreamMessage(VideoChunks.Chunk chunk) throws JSONException {
+    public static JSONObject createStreamMessage(MediaChunks.Chunk chunk) throws JSONException {
         JSONObject msg = get();
-        msg.put(TYPE_KEY, "stream");
+        msg.put(TYPE_KEY, chunk.isAudio ? AUDIO_TYPE_VALUE : VIDEO_TYPE_VALUE);
+        //msg.put(TYPE_KEY, "stream");
         String base64 = Base64.encodeToString(chunk.data, Base64.DEFAULT);
         try {
             //msg[data] = Buffer() in javascript

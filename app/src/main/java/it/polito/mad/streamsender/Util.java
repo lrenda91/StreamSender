@@ -2,6 +2,7 @@ package it.polito.mad.streamsender;
 
 import android.content.Context;
 import android.graphics.ImageFormat;
+import android.media.CamcorderProfile;
 import android.media.MediaCodec;
 import android.media.MediaCodecInfo;
 import android.net.wifi.WifiInfo;
@@ -9,6 +10,10 @@ import android.net.wifi.WifiManager;
 import android.os.Build;
 import android.text.format.Formatter;
 import android.util.Log;
+
+import java.util.ArrayList;
+import java.util.LinkedList;
+import java.util.List;
 
 /**
  * Created by luigi on 27/01/16.
@@ -60,6 +65,7 @@ public class Util {
 
     public static int getEncoderColorFormat(int previewFormat){
         if (Build.VERSION.SDK_INT >= 21){
+            //return MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface;
             return MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Flexible;
         }
         switch(previewFormat){
@@ -102,6 +108,84 @@ public class Util {
                 Log.d(tag, "YUV_444_888"); break;
             default:
                 Log.d(tag, "unknown ImageFormat"); break;
+        }
+    }
+
+    public static List<CamcorderProfile> getSupportedProfiles(int cameraID){
+        List<CamcorderProfile> res = new LinkedList<>();
+        int[] profiles = {
+                CamcorderProfile.QUALITY_1080P,
+                CamcorderProfile.QUALITY_2160P,
+                CamcorderProfile.QUALITY_480P,
+                CamcorderProfile.QUALITY_720P,
+                CamcorderProfile.QUALITY_CIF,
+                CamcorderProfile.QUALITY_HIGH,
+                CamcorderProfile.QUALITY_HIGH_SPEED_1080P,
+                CamcorderProfile.QUALITY_HIGH_SPEED_2160P,
+                CamcorderProfile.QUALITY_HIGH_SPEED_720P,
+                CamcorderProfile.QUALITY_HIGH_SPEED_480P,
+                CamcorderProfile.QUALITY_HIGH_SPEED_HIGH,
+                CamcorderProfile.QUALITY_HIGH_SPEED_LOW,
+                CamcorderProfile.QUALITY_LOW,
+                CamcorderProfile.QUALITY_QCIF,
+                CamcorderProfile.QUALITY_QVGA
+        };
+        for (int p : profiles){
+            if (CamcorderProfile.hasProfile(cameraID, p)){
+                logCamcorderProfile(p);
+                res.add(CamcorderProfile.get(cameraID, p));
+            }
+        }
+        return res;
+    }
+
+    public static void logCamcorderProfile(int quality){
+        switch (quality){
+            case CamcorderProfile.QUALITY_1080P:
+                Log.d("PROFILE", "QUALITY_1080P");
+                break;
+            case CamcorderProfile.QUALITY_2160P:
+                Log.d("PROFILE", "QUALITY_2160P");
+                break;
+            case CamcorderProfile.QUALITY_480P:
+                Log.d("PROFILE", "QUALITY_480P");
+                break;
+            case CamcorderProfile.QUALITY_720P:
+                Log.d("PROFILE", "QUALITY_720P");
+                break;
+                    case CamcorderProfile.QUALITY_CIF:
+                        Log.d("PROFILE", "QUALITY_CIF");
+                        break;
+            case CamcorderProfile.QUALITY_HIGH:
+                Log.d("PROFILE", "QUALITY_HIGH");
+                break;
+            case CamcorderProfile.QUALITY_HIGH_SPEED_1080P:
+                Log.d("PROFILE", "QUALITY_HIGH_SPEED_1080P");
+                break;
+            case   CamcorderProfile.QUALITY_HIGH_SPEED_2160P:
+                Log.d("PROFILE", "QUALITY_HIGH_SPEED_2160P");
+                break;
+            case    CamcorderProfile.QUALITY_HIGH_SPEED_720P:
+                Log.d("PROFILE", "QUALITY_HIGH_SPEED_720P");
+                break;
+            case    CamcorderProfile.QUALITY_HIGH_SPEED_480P:
+                Log.d("PROFILE", "QUALITY_HIGH_SPEED_480P");
+                break;
+            case    CamcorderProfile.QUALITY_HIGH_SPEED_HIGH:
+                Log.d("PROFILE", "QUALITY_HIGH_SPEED_HIGH");
+                break;
+            case    CamcorderProfile.QUALITY_HIGH_SPEED_LOW:
+                Log.d("PROFILE", "QUALITY_HIGH_SPEED_LOW");
+                break;
+            case    CamcorderProfile.QUALITY_LOW:
+                Log.d("PROFILE", "QUALITY_LOW");
+                break;
+            case    CamcorderProfile.QUALITY_QCIF:
+                Log.d("PROFILE", "QUALITY_QCIF");
+                break;
+            case    CamcorderProfile.QUALITY_QVGA:
+                Log.d("PROFILE", "QUALITY_QVGA");
+                break;
         }
     }
 

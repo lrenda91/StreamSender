@@ -1,7 +1,5 @@
 package it.polito.mad.websocket;
 
-import android.annotation.TargetApi;
-import android.os.Build;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
@@ -15,7 +13,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import it.polito.mad.JSONMessageFactory;
-import it.polito.mad.streamsender.VideoChunks;
+import it.polito.mad.streamsender.MediaChunks;
 
 /**
  * Manages a {@link WebSocket} inside a background thread
@@ -55,6 +53,7 @@ public class WSClient extends AbstractWSClient {
                     mWebSocket = new WebSocketFactory().createSocket(uri, timeout);
                     mWebSocket.addListener(WSClient.this);
 
+
                     mWebSocket.connect();
                     if (VERBOSE) Log.d(TAG, "Successfully connected to " + uri);
                 } catch (final Exception e) {
@@ -89,9 +88,9 @@ public class WSClient extends AbstractWSClient {
         mWebSocket.sendClose();
     }
 
-    public void sendConfigBytes(final byte[] configData){
+    public void sendConfigBytes(boolean audio, final byte[] configData){
         try {
-            JSONObject configMsg = JSONMessageFactory.createConfigMessage(configData);
+            JSONObject configMsg = JSONMessageFactory.createConfigMessage(audio, configData);
             mWebSocket.sendText(configMsg.toString());
             //String base64 = configMsg.getString(JSONMessageFactory.DATA_KEY);
 
@@ -100,7 +99,7 @@ public class WSClient extends AbstractWSClient {
         }
     }
 
-    public void sendStreamBytes(final VideoChunks.Chunk chunk){
+    public void sendStreamBytes(final MediaChunks.Chunk chunk){
         try {
             JSONObject obj = JSONMessageFactory.createStreamMessage(chunk);
             mWebSocket.sendText(obj.toString());
@@ -112,37 +111,10 @@ public class WSClient extends AbstractWSClient {
 
     @Override
     public void onDisconnected(WebSocket websocket, WebSocketFrame serverCloseFrame, WebSocketFrame clientCloseFrame, boolean closedByServer) throws Exception {
+        Log.d("WS", serverCloseFrame.getCloseReason());
+        Log.d("WS", clientCloseFrame.getCloseReason());
         Log.d("WS", "disconnected by server: "+closedByServer);
     }
 
-    /**
-     * Starts a background thread and its {@link Handler}.
-     */
-    public void startBackgroundThread() {
-        mBackgroundThread = new HandlerThread("CameraBackground"){
-            @Override
-            protected void onLooperPrepared() {
-                super.onLooperPrepared();
-                mBackgroundHandler = new Handler();
-            }
-        };
-        mBackgroundThread.start();
-        if (VERBOSE) Log.d(TAG, "Background thread started!!");
-    }
 
-    /**
-     * Stops the background thread and its {@link Handler}.
-     */
-    @TargetApi(Build.VERSION_CODES.JELLY_BEAN_MR2)
-    public void stopBackgroundThread() {
-        mBackgroundThread.quitSafely();
-        try {
-            mBackgroundThread.join();
-            mBackgroundThread = null;
-            mBackgroundHandler = null;
-            Log.d(TAG, "Web socket Client TERMINATED!");
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
-    }
 }

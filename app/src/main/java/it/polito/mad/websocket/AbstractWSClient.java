@@ -12,7 +12,6 @@ import java.net.InetAddress;
  */
 public abstract class AbstractWSClient extends WebSocketAdapter implements WebSocketClient {
 
-    protected WebSocketListener mProtocol;
     protected WebSocket mWebSocket;
 
     @Override
