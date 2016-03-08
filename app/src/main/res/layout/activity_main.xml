@@ -17,11 +17,39 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent">
 
-            <FrameLayout
-                android:id="@+id/preview"
-                android:layout_gravity="center_horizontal"
-                android:layout_width="450dp"
-                android:layout_height="600dp" />
+            <RelativeLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content">
+                <!--<FrameLayout
+                    android:id="@+id/preview"
+                    android:layout_width="300dp"
+                    android:layout_height="400dp" />-->
+                <SurfaceView
+                    android:id="@+id/preview"
+                    android:layout_width="300dp"
+                    android:layout_height="400dp" />
+                <LinearLayout
+                    android:orientation="vertical"
+                    android:layout_toRightOf="@id/preview"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content">
+                    <Button
+                        android:id="@+id/toggle_net_monitor"
+                        android:text="ON/OFF NET MONITOR"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+                    <TextView
+                        android:id="@+id/tx_text"
+                        android:text="TX:"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+                    <TextView
+                        android:id="@+id/rx_text"
+                        android:text="RX:"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+                </LinearLayout>
+            </RelativeLayout>
 
             <LinearLayout
                 android:orientation="horizontal"
@@ -71,6 +99,7 @@
                     android:padding="5dp"
                     android:layout_width="0dp"
                     android:layout_weight="1"
+                    android:enabled="false"
                     android:text="REC"
                     android:layout_marginTop="10dp"
                     android:layout_height="40dp"/>

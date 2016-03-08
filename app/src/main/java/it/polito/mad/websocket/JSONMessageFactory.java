@@ -1,13 +1,12 @@
-package it.polito.mad;
+package it.polito.mad.websocket;
 
 import android.util.Base64;
 
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.io.UnsupportedEncodingException;
-
-import it.polito.mad.streamsender.VideoChunks;
+import it.polito.mad.record.VideoChunks;
 
 /**
  * Created by luigi on 24/01/16.
@@ -33,12 +32,30 @@ public class JSONMessageFactory {
         return msg;
     }
 
+    public static JSONObject createHelloMessage(String device, String[] qualities) throws JSONException {
+        JSONObject msg = get();
+        msg.put(TYPE_KEY, "hello");
+        msg.put("device", device);
+        JSONArray array = new JSONArray();
+        for (String s : qualities) {
+            array.put(s);
+        }
+        msg.put("qualities", array);
+        return msg;
+    }
+
+
+    /**
+     * Creates JSON object which wraps the first frame (SPS-PPS configuration)
+     * @param configData
+     * @return
+     * @throws JSONException
+     */
     public static JSONObject createConfigMessage(byte[] configData) throws JSONException {
         JSONObject msg = get();
         msg.put(TYPE_KEY, "config");
         String base64 = Base64.encodeToString(configData, Base64.DEFAULT);
         try {
-            //msg[data] = Buffer() in javascript
             msg.put(DATA_KEY, base64);
         }
         catch(Exception e){
