@@ -1,4 +1,4 @@
-package it.polito.mad.record;
+package it.polito.mad.streamsender.record;
 
 import android.graphics.ImageFormat;
 import android.media.MediaCodec;
@@ -10,7 +10,7 @@ import android.util.Log;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
-import it.polito.mad.Util;
+import it.polito.mad.streamsender.Util;
 
 /**
  * Created by luigi on 21/01/16.
@@ -75,6 +75,7 @@ public class EncoderThread implements Runnable {
         } catch(InterruptedException e){
             result = false;
         }
+        mRawFrames.clear();
         mWorkerThread = null;
         return result;
     }
@@ -91,9 +92,10 @@ public class EncoderThread implements Runnable {
         mRawFrames.addChunk(data, 0, 0);
     }
 
-    public void drain(){
+    /*public void drain(){
         mRawFrames.clear();
     }
+    */
 
     @Override
     public void run() {
@@ -143,7 +145,7 @@ public class EncoderThread implements Runnable {
                 //if (VERBOSE) Log.i(TAG, "Waiting for input buffer");
                 inputStatus = encoder.dequeueInputBuffer(10000);
                 if (inputStatus < 0){
-                    Log.e(TAG, "Unknown input buffer status: "+inputStatus);
+                    //Log.e(TAG, "Unknown input buffer status: "+inputStatus);
                     continue;
                 }
 
@@ -166,14 +168,11 @@ public class EncoderThread implements Runnable {
                     if (inputBuf.remaining() >= previewData.length) {
 
                         bufferLength = previewData.length;
-                        Log.d(TAG, "buf remaining()=" + inputBuf.remaining() + " byte[] size=" + previewData.length);
+                        if (VERBOSE) Log.d(TAG, "buf remaining()=" + inputBuf.remaining() + " ,size=" + previewData.length);
                         inputBuf.put(previewData);
                         encoder.queueInputBuffer(inputStatus, 0, bufferLength, pts, flags);
                     }
                 }
-
-                //encoder.queueInputBuffer(inputStatus, 0, bufferLength, pts, flags);
-
                 framesCounter++;
             }
 

@@ -1,7 +1,6 @@
-package it.polito.mad.record;
+package it.polito.mad.streamsender.record;
 
 import android.hardware.Camera;
-import android.view.Surface;
 import android.view.SurfaceHolder;
 
 import java.io.IOException;

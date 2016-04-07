@@ -1,8 +1,6 @@
-package it.polito.mad.websocket;
+package it.polito.mad.streamsender.websocket;
 
-import android.os.Build;
 import android.os.Handler;
-import android.os.HandlerThread;
 import android.os.Looper;
 import android.util.Log;
 
@@ -15,12 +13,10 @@ import com.neovisionaries.ws.client.WebSocketFrame;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.io.IOException;
 import java.util.List;
 import java.util.Map;
-import java.util.regex.Pattern;
 
-import it.polito.mad.record.VideoChunks;
+import it.polito.mad.streamsender.record.VideoChunks;
 
 /**
  * Manages a {@link WebSocket} inside a background thread
@@ -36,8 +32,9 @@ public class WSClientImpl extends WebSocketAdapter implements WSClient {
     private String mConnectURI;
 
     public interface Listener {
-        void onConnectionEstablished();
-        void onServerUnreachable(Exception e);
+        void onConnectionEstablished(String uri);
+        void onConnectionClosed(boolean closedByServer);
+        void onConnectionError(Exception e);
         void onResetReceived(int w, int h);
     }
 
@@ -73,7 +70,7 @@ public class WSClientImpl extends WebSocketAdapter implements WSClient {
                     mMainHandler.post(new Runnable() {
                         @Override
                         public void run() {
-                            if (mListener != null) mListener.onServerUnreachable(e);
+                            if (mListener != null) mListener.onConnectionError(e);
                         }
                     });
                     return;
@@ -84,31 +81,22 @@ public class WSClientImpl extends WebSocketAdapter implements WSClient {
 
     @Override
     public void closeConnection() {
-        /*try {
-            JSONObject obj = JSONMessageFactory.createResetMessage();
-            mWebSocket.sendText(obj.toString());
-        }
-        catch(JSONException e){
-
-        }
-        */
         mWebSocket.sendClose();
     }
 
-    public void sendHelloMessage(String device, String[] qualities){
+    public void sendHelloMessage(String device, String[] qualities, int currentIdx){
         try {
-            JSONObject configMsg = JSONMessageFactory.createHelloMessage(device, qualities);
+            JSONObject configMsg = JSONMessageFactory.createHelloMessage(device, qualities, currentIdx);
             mWebSocket.sendText(configMsg.toString());
         } catch (JSONException e) {
 
         }
     }
 
-    public void sendConfigBytes(final byte[] configData){
+    public void sendConfigBytes(final byte[] configData, int width, int height, int encodeBps, int frameRate){
         try {
-            JSONObject configMsg = JSONMessageFactory.createConfigMessage(configData);
+            JSONObject configMsg = JSONMessageFactory.createConfigMessage(configData, width, height, encodeBps, frameRate);
             mWebSocket.sendText(configMsg.toString());
-            //String base64 = configMsg.getString(JSONMessageFactory.DATA_KEY);
 
         } catch (JSONException e) {
 
@@ -131,7 +119,7 @@ public class WSClientImpl extends WebSocketAdapter implements WSClient {
         mMainHandler.post(new Runnable() {
             @Override
             public void run() {
-                if (mListener != null) mListener.onConnectionEstablished();
+                if (mListener != null) mListener.onConnectionEstablished(mConnectURI);
             }
         });
     }
@@ -141,7 +129,7 @@ public class WSClientImpl extends WebSocketAdapter implements WSClient {
         mMainHandler.post(new Runnable() {
             @Override
             public void run() {
-                if (mListener != null) mListener.onServerUnreachable(exception);
+                if (mListener != null) mListener.onConnectionError(exception);
             }
         });
     }
@@ -153,8 +141,14 @@ public class WSClientImpl extends WebSocketAdapter implements WSClient {
     }
 
     @Override
-    public void onDisconnected(WebSocket websocket, WebSocketFrame serverCloseFrame, WebSocketFrame clientCloseFrame, boolean closedByServer) throws Exception {
+    public void onDisconnected(WebSocket websocket, WebSocketFrame serverCloseFrame, WebSocketFrame clientCloseFrame, final boolean closedByServer) throws Exception {
         Log.d("WS", "disconnected by server: " + closedByServer);
+        mMainHandler.post(new Runnable() {
+            @Override
+            public void run() {
+                if (mListener != null) mListener.onConnectionClosed(closedByServer);
+            }
+        });
     }
 
     @Override

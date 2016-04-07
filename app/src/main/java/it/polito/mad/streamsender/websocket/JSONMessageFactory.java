@@ -1,4 +1,4 @@
-package it.polito.mad.websocket;
+package it.polito.mad.streamsender.websocket;
 
 import android.util.Base64;
 
@@ -6,7 +6,7 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import it.polito.mad.record.VideoChunks;
+import it.polito.mad.streamsender.record.VideoChunks;
 
 /**
  * Created by luigi on 24/01/16.
@@ -19,10 +19,14 @@ public class JSONMessageFactory {
     public static final String TYPE_KEY = "type";
     public static final String DATA_KEY = "data";
     public static final String FLAGS_KEY = "flags";
+    public static final String WIDTH_KEY = "width";
+    public static final String HEIGHT_KEY = "height";
+    public static final String BPS_KEY = "encodeBps";
+    public static final String FPS_KEY = "frameRate";
     public static final String TIMESTAMP_KEY = "ts";
-    /*private static final String CONFIG_TYPE_VALUE = "config";
-    private static final String STREAM_TYPE_VALUE = "stream";
-    private static final String RESET_TYPE_VALUE = "reset";*/
+    public static final String DEVICE_KEY = "device";
+    public static final String QUALITIES_KEY = "qualities";
+    public static final String CURRENT_QUALITY_KEY = "current";
 
     private JSONMessageFactory(){}
 
@@ -32,15 +36,17 @@ public class JSONMessageFactory {
         return msg;
     }
 
-    public static JSONObject createHelloMessage(String device, String[] qualities) throws JSONException {
+    public static JSONObject createHelloMessage(String device, String[] qualities,
+                                                int currentIdx) throws JSONException {
         JSONObject msg = get();
         msg.put(TYPE_KEY, "hello");
-        msg.put("device", device);
+        msg.put(DEVICE_KEY, device);
         JSONArray array = new JSONArray();
         for (String s : qualities) {
             array.put(s);
         }
-        msg.put("qualities", array);
+        msg.put(QUALITIES_KEY, array);
+        msg.put(CURRENT_QUALITY_KEY, qualities[currentIdx]);
         return msg;
     }
 
@@ -51,16 +57,16 @@ public class JSONMessageFactory {
      * @return
      * @throws JSONException
      */
-    public static JSONObject createConfigMessage(byte[] configData) throws JSONException {
+    public static JSONObject createConfigMessage(byte[] configData,
+            int width, int height, int encodeBps, int frameRate) throws JSONException {
         JSONObject msg = get();
         msg.put(TYPE_KEY, "config");
         String base64 = Base64.encodeToString(configData, Base64.DEFAULT);
-        try {
-            msg.put(DATA_KEY, base64);
-        }
-        catch(Exception e){
-            throw new JSONException(e.getClass().getSimpleName());
-        }
+        msg.put(DATA_KEY, base64);
+        msg.put(WIDTH_KEY, width);
+        msg.put(HEIGHT_KEY, height);
+        msg.put(BPS_KEY, encodeBps);
+        msg.put(FPS_KEY, frameRate);
         return msg;
     }
 
@@ -68,13 +74,7 @@ public class JSONMessageFactory {
         JSONObject msg = get();
         msg.put(TYPE_KEY, "stream");
         String base64 = Base64.encodeToString(chunk.data, Base64.DEFAULT);
-        try {
-            //msg[data] = Buffer() in javascript
-            msg.put(DATA_KEY, base64);
-        }
-        catch(Exception e){
-            throw new JSONException(e.getClass().getSimpleName());
-        }
+        msg.put(DATA_KEY, base64);
         msg.put(FLAGS_KEY, chunk.flags);
         msg.put(TIMESTAMP_KEY, chunk.presentationTimestampUs);
         return msg;

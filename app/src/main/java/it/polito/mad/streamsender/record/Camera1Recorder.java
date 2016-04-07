@@ -1,8 +1,6 @@
-package it.polito.mad.record;
+package it.polito.mad.streamsender.record;
 
 import android.view.SurfaceView;
-
-import it.polito.mad.streamsender.Params;
 
 /**
  * Created by luigi on 24/02/16.

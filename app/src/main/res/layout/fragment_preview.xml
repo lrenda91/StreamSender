@@ -1,0 +1,63 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:orientation="vertical"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".ui.PreviewFragment">
+
+    <LinearLayout
+        android:orientation="horizontal"
+        android:weightSum="4"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <Button
+            android:id="@+id/button_rec"
+            android:drawableTop="@drawable/ic_record"
+            android:text="rec"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:enabled="false"
+            android:layout_height="wrap_content"/>
+
+        <Button
+            android:id="@+id/button_pause"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:enabled="false"
+            android:drawableTop="@drawable/ic_pause"
+            android:text="pause"
+            android:layout_height="wrap_content"/>
+
+        <Button
+            android:id="@+id/button_stop"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:enabled="false"
+            android:drawableTop="@drawable/ic_stop"
+            android:text="stop"
+            android:layout_height="wrap_content"/>
+
+        <Button
+            android:id="@+id/button_quality_switch"
+            android:layout_width="0dp"
+            android:drawableTop="@drawable/ic_scale"
+            android:text="scale"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"/>
+
+    </LinearLayout>
+    <Button
+        android:id="@+id/button_connect"
+        android:layout_width="match_parent"
+        android:text="CONNECT"
+        android:layout_height="wrap_content"/>
+
+
+    <SurfaceView
+        android:id="@+id/preview"
+        android:layout_gravity="center_horizontal"
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent" />
+
+</LinearLayout>

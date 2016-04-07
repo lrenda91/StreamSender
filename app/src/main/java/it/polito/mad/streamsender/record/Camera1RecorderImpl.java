@@ -1,13 +1,14 @@
-package it.polito.mad.record;
+package it.polito.mad.streamsender.record;
 
 import android.content.Context;
 import android.hardware.Camera;
 import android.util.Log;
 import android.view.SurfaceView;
+import android.view.ViewGroup;
 
 import java.io.IOException;
 
-import it.polito.mad.Util;
+import it.polito.mad.streamsender.Util;
 
 /**
  * Created by luigi on 24/02/16.
@@ -15,13 +16,12 @@ import it.polito.mad.Util;
 @SuppressWarnings("deprecation")
 public class Camera1RecorderImpl implements Camera1Recorder,Camera1ManagerImpl.Callback {
 
+    private static final int sRatioWidth = 4;
+    private static final int sRatioHeight = 3;
+
     private Context mContext;
     private Camera1Manager mCameraManager;
     private EncoderThread mEncoderThread;
-
-    //private SurfaceView mCameraView;
-
-    //private Params mRecorderParams = new Params();
 
     public Camera1RecorderImpl(Context context){
         if (context == null){
@@ -46,17 +46,27 @@ public class Camera1RecorderImpl implements Camera1Recorder,Camera1ManagerImpl.C
 
     @Override
     public void acquireCamera() {
-        Log.d("recorder", "acquire camera");
         mCameraManager.acquireCamera();
     }
 
     @Override
-    public void setSurfaceView(SurfaceView surfaceView) {
-        try {
-            mCameraManager.setPreviewSurface(surfaceView.getHolder());
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+    public void setSurfaceView(final SurfaceView surfaceView) {
+        surfaceView.post(new Runnable() {
+            @Override
+            public void run() {
+                //int w = surfaceView.getMeasuredWidth();
+                int measuredHeight = surfaceView.getMeasuredHeight();
+                ViewGroup.LayoutParams lp = surfaceView.getLayoutParams();
+                lp.width = measuredHeight * 3 / 4;
+                surfaceView.setLayoutParams(lp);
+
+                try {
+                    mCameraManager.setPreviewSurface(surfaceView.getHolder());
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        });
     }
 
     @Override
@@ -64,6 +74,11 @@ public class Camera1RecorderImpl implements Camera1Recorder,Camera1ManagerImpl.C
         Camera.Size size = mCameraManager.getCurrentSize();
         int format = mCameraManager.getImageFormat();
         mEncoderThread.submitAccessUnit(Util.swapColors(frame, size.width, size.height, format));
+    }
+
+    @Override
+    public void onCameraPreviewSizeChanged(int width, int height) {
+
     }
 
     @Override
@@ -83,37 +98,40 @@ public class Camera1RecorderImpl implements Camera1Recorder,Camera1ManagerImpl.C
     @Override
     public void stopRecording() {
         mEncoderThread.requestStop();
-        mEncoderThread.waitForTermination();
 
+        mCameraManager.disableFrameCapture();
         mCameraManager.stopPreview();
+
+        mEncoderThread.waitForTermination();
     }
 
     @Override
     public void switchToNextVideoQuality() {
         mCameraManager.disableFrameCapture();
+        mCameraManager.stopPreview();
+
+        boolean wasRecording = (mEncoderThread.isRunning());
         mEncoderThread.requestStop();
 
-        //Camera camera = mCameraManager.getCameraInstance();
-        //Camera.Size newSize = camera.new Size(params.width, params.height);
-        //mCameraManager.switchToSize(newSize);
         mCameraManager.switchToMajorSize();
-        /*try {
-            mCameraManager.setPreviewSurface(mCameraView.getHolder());
-        }catch(IOException e){
-            throw new RuntimeException(e);
-        }*/
 
         mEncoderThread.waitForTermination();
-        mEncoderThread.drain();
+        //mEncoderThread.drain();
 
         mCameraManager.enableFrameCapture();
         mCameraManager.startPreview();
+
+        if (wasRecording){
+            startRecording();
+        }
     }
 
     @Override
     public void switchToVideoQuality(int width, int height){
         Camera.Size size = mCameraManager.getCameraInstance().new Size(width, height);
         mCameraManager.disableFrameCapture();
+
+        boolean wasRecording = (mEncoderThread.isRunning());
         mEncoderThread.requestStop();
 
         try{
@@ -124,10 +142,14 @@ public class Camera1RecorderImpl implements Camera1Recorder,Camera1ManagerImpl.C
         }
 
         mEncoderThread.waitForTermination();
-        mEncoderThread.drain();
+        //mEncoderThread.drain();
 
         mCameraManager.enableFrameCapture();
         mCameraManager.startPreview();
+
+        if (wasRecording){
+            startRecording();
+        }
     }
 
     @Override

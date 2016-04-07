@@ -1,9 +1,6 @@
-package it.polito.mad.websocket;
+package it.polito.mad.streamsender.websocket;
 
 import com.neovisionaries.ws.client.WebSocket;
-import com.neovisionaries.ws.client.WebSocketException;
-
-import java.net.InetAddress;
 
 /**
  * Created by luigi on 02/12/15.

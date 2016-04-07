@@ -4,6 +4,7 @@ import android.content.Context;
 import android.net.TrafficStats;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Log;
 import android.widget.TextView;
 
 /**
@@ -11,11 +12,14 @@ import android.widget.TextView;
  */
 public class NetworkMonitor {
 
-    interface Callback {
+    public interface Callback {
         void onData(long txBytes, long rxBytes);
         void onDataRate(long txBps, long rxBps);
         void onUnsupportedTrafficStats();
     }
+
+    private static final boolean VERBOSE = true;
+    private static final String TAG = "NetMonitor";
 
     private int mAppUID = android.os.Process.myUid();
     private long mStartRX, mStartTX, mPreviousRX, mPreviousTX;
@@ -56,11 +60,13 @@ public class NetworkMonitor {
         }
         mRunning = true;
         mHandler.postDelayed(mRunnable, 1000);
+        if (VERBOSE) Log.d(TAG, "Started");
     }
 
     public void stop(){
         mHandler.removeCallbacks(mRunnable);
         mRunning = false;
+        if (VERBOSE) Log.d(TAG, "Stopped");
     }
 
     public boolean isRunning(){

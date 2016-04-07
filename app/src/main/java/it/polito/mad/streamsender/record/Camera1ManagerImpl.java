@@ -1,4 +1,4 @@
-package it.polito.mad.record;
+package it.polito.mad.streamsender.record;
 
 import android.content.Context;
 import android.graphics.ImageFormat;
@@ -9,10 +9,12 @@ import android.view.SurfaceHolder;
 import android.view.WindowManager;
 
 import java.io.IOException;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.LinkedList;
 import java.util.List;
 
-import it.polito.mad.Util;
+import it.polito.mad.streamsender.Util;
 
 /**
  * Created by luigi on 24/02/16.
@@ -21,29 +23,30 @@ import it.polito.mad.Util;
 public class Camera1ManagerImpl implements Camera1Manager {
 
     public interface Callback {
+        void onCameraPreviewSizeChanged(int width, int height);
         void onCameraCapturedFrame(byte[] frame);
     }
 
     private static final String TAG = "Camera";
+    private static final boolean VERBOSE = true;
 
     private static final int sRatioWidth = 4;
     private static final int sRatioHeight = 3;
 
-    //by default, but it could be YV12
+    //by default, it is NV21
     public int mImageFormat = ImageFormat.NV21;
 
-    private static final int mNumOfBuffers = 3;
+    private static final int mNumOfBuffers = 4;
     private byte[][] mBuffers;
     private int mCurrentBufferIdx = 0;
     private int mCurrentBuffersSize;
     private Camera.PreviewCallback mPreviewCallback = new Camera.PreviewCallback() {
         @Override
         public void onPreviewFrame(byte[] data, Camera camera) {
-            if (data.length != mCurrentBuffersSize){
+            if (data == null || data.length != mCurrentBuffersSize){
                 return;
             }
             useNextCallbackBuffer();
-
             if (mCallback != null){
                 mCallback.onCameraCapturedFrame(data);
             }
@@ -68,18 +71,47 @@ public class Camera1ManagerImpl implements Camera1Manager {
         checkForCameraAcquisition(false);
 
         mCamera = Camera.open(0);
-        Util.getAvailableProfiles(0);
+        if (VERBOSE) Log.d(TAG, "Camera acquired");
+
+        Camera.Parameters parameters = mCamera.getParameters();
+        int chosen = -1;
+        for (int format : parameters.getSupportedPreviewFormats()){
+            try{
+                parameters.setPreviewFormat(format);
+                mCamera.setParameters(parameters);
+                chosen = format;
+                break;
+            }
+            catch(Throwable t){
+                Log.e(TAG, "Error setting ImageFormat "+format);
+                continue;
+            }
+        }
+        if (chosen < 0){
+            throw new RuntimeException("Can't find suitable ImageFormat");
+        }
+        mImageFormat = chosen;
+        if (VERBOSE) Util.logCameraPictureFormat(TAG, mImageFormat);
+
         mSuitableSizes = new LinkedList<>();
         for (Camera.Size s : mCamera.getParameters().getSupportedPreviewSizes()){
             if ((s.width * sRatioHeight / sRatioWidth) == s.height){
                 mSuitableSizes.add(s);
             }
         }
-        Util.logCameraSizes(TAG, mSuitableSizes);
-        mImageFormat = getColorFormat(mCamera.getParameters());
-        Util.logCameraPictureFormat("ImageFormat", mImageFormat);
-        Camera.Size currentSize = getCurrentSize();
-        switchToSize(currentSize);
+        Collections.sort(mSuitableSizes, new Comparator<Camera.Size>() {
+            @Override
+            public int compare(Camera.Size lhs, Camera.Size rhs) {
+                if (lhs.width > rhs.width) return 1;
+                if (lhs.width < rhs.width) return -1;
+                if (lhs.height > rhs.height) return 1;
+                if (lhs.height < rhs.height) return -1;
+                return 0;
+            }
+        });
+        if (VERBOSE) Util.logCameraSizes(TAG, mSuitableSizes);
+
+        switchToSize(getCurrentSize());
     }
 
     @Override
@@ -114,17 +146,16 @@ public class Camera1ManagerImpl implements Camera1Manager {
     public void switchToSize(Camera.Size newSize) throws IllegalArgumentException{
         int idx = mSuitableSizes.indexOf(newSize);
         if (idx < 0){
-            throw new IllegalArgumentException("Illegal size: "+newSize.width+"x"+newSize.height);
+            throw new IllegalArgumentException("Illegal size: "+Util.sizeToString(newSize));
         }
         mSuitableSizesIndex = idx;
-        Log.d(TAG, "idx="+mSuitableSizesIndex);
         int width = newSize.width;
         int height = newSize.height;
         resizeBuffers(width, height);
         Camera.Parameters parameters = mCamera.getParameters();
-        parameters.setPreviewFormat(mImageFormat);
         parameters.setPreviewSize(width, height);
         mCamera.setParameters(parameters);
+        if (mCallback != null) mCallback.onCameraPreviewSizeChanged(width, height);
     }
 
     @Override
@@ -133,7 +164,9 @@ public class Camera1ManagerImpl implements Camera1Manager {
         final int rotation = wm.getDefaultDisplay().getRotation();
         surfaceHolder.addCallback(new SurfaceHolder.Callback() {
             @Override
-            public void surfaceCreated(SurfaceHolder holder) {}
+            public void surfaceCreated(SurfaceHolder holder) {
+            }
+
             @Override
             public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
                 try {
@@ -159,7 +192,8 @@ public class Camera1ManagerImpl implements Camera1Manager {
             }
 
             @Override
-            public void surfaceDestroyed(SurfaceHolder holder) {}
+            public void surfaceDestroyed(SurfaceHolder holder) {
+            }
         });
     }
 
@@ -185,7 +219,6 @@ public class Camera1ManagerImpl implements Camera1Manager {
     @Override
     public void stopPreview() {
         checkForCameraAcquisition(true);
-        disableFrameCapture();
         mCamera.stopPreview();
     }
 
@@ -196,6 +229,7 @@ public class Camera1ManagerImpl implements Camera1Manager {
         }
         mCamera.release();
         mCamera = null;
+        if (VERBOSE) Log.d(TAG, "Camera released");
     }
 
     @Override
@@ -214,14 +248,14 @@ public class Camera1ManagerImpl implements Camera1Manager {
         }
         mCurrentBuffersSize = (int) bufferSize;
         mBuffers = new byte[mNumOfBuffers][(int)bufferSize];
-
-        Log.d(TAG, "new preview size="+width+"x"+height+" ; Buffers size= "+ mBuffers[0].length);
+        if (VERBOSE) Log.d(TAG, "new preview size=("+width+","+height+") ; Buffers size= "+ bufferSize);
     }
 
 
     private int getColorFormat(Camera.Parameters params){
         int res = -1;
         for (int format : params.getSupportedPreviewFormats()) {
+            Util.logCameraPictureFormat(TAG+" supported", format);
             switch (format) {
                 case ImageFormat.NV21:
                 case ImageFormat.YV12:
@@ -230,7 +264,6 @@ public class Camera1ManagerImpl implements Camera1Manager {
             }
         }
         if (res < 0) res = ImageFormat.NV21;
-        Util.logCameraPictureFormat(TAG, res);
         return res;
     }
 
@@ -241,7 +274,6 @@ public class Camera1ManagerImpl implements Camera1Manager {
 
     private void checkForCameraAcquisition(boolean cameraRequired){
         boolean cameraAcquiredNow = (mCamera != null);
-        //if ((cameraRequired && mCamera == null) || (!cameraRequired && ))
         if (cameraAcquiredNow ^ cameraRequired){
             throw new IllegalStateException("State");
         }

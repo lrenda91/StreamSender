@@ -1,4 +1,4 @@
-package it.polito.mad;
+package it.polito.mad.streamsender;
 
 import android.graphics.ImageFormat;
 import android.hardware.Camera;
@@ -176,6 +176,14 @@ public class Util {
         Pattern p = Pattern.compile(
                 "^(25[0-5]|2[0-4]\\d|[0-1]?\\d?\\d)(\\.(25[0-5]|2[0-4]\\d|[0-1]?\\d?\\d)){3}$");
         return p.matcher(ipString).matches();
+    }
+
+    public static String sizeToString(Camera.Size size){
+        return size.width + "x" + size.height;
+    }
+
+    public static String getCompleteDeviceName(){
+        return Build.MANUFACTURER + " " + Build.MODEL;
     }
 
 }

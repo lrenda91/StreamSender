@@ -1,6 +1,5 @@
-package it.polito.mad.record;
+package it.polito.mad.streamsender.record;
 
-import java.nio.ByteBuffer;
 import java.util.LinkedList;
 
 /**
