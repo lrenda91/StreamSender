@@ -16,7 +16,7 @@ import org.json.JSONObject;
 import java.util.List;
 import java.util.Map;
 
-import it.polito.mad.streamsender.record.VideoChunks;
+import it.polito.mad.streamsender.encoding.VideoChunks;
 
 /**
  * Manages a {@link WebSocket} inside a background thread

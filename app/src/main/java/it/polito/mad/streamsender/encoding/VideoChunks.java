@@ -1,4 +1,4 @@
-package it.polito.mad.streamsender.record;
+package it.polito.mad.streamsender.encoding;
 
 import java.util.LinkedList;
 

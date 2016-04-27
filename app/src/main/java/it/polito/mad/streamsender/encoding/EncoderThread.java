@@ -1,4 +1,4 @@
-package it.polito.mad.streamsender.record;
+package it.polito.mad.streamsender.encoding;
 
 import android.graphics.ImageFormat;
 import android.media.MediaCodec;
@@ -37,14 +37,16 @@ public class EncoderThread implements Runnable {
     private static final int FRAME_RATE = 20;
     private static final int I_FRAME_INTERVAL = 1;
     private static final int BIT_RATE_BPS = 500000;
-    private static final long NUM_FRAMES = -1;
 
     private Thread mWorkerThread;
-    private Listener mListener;
+    private EncodingCallback mListener;
     private VideoChunks mRawFrames = new VideoChunks();
     private int mWidth, mHeight;
 
-    public EncoderThread(Listener listener){
+    public EncodingCallback getListener(){
+        return mListener;
+    }
+    public EncoderThread(EncodingCallback listener){
         mListener = listener;
     }
 
@@ -84,7 +86,7 @@ public class EncoderThread implements Runnable {
         return mWorkerThread != null;
     }
 
-    public void setListener(Listener mListener) {
+    public void setListener(EncodingCallback mListener) {
         this.mListener = mListener;
     }
 
@@ -129,6 +131,10 @@ public class EncoderThread implements Runnable {
         catch(IOException e){
             Log.e(TAG, "Unable to create an appropriate codec for " + MIME_TYPE);
             return;
+        }
+
+        if (mListener != null){
+            mListener.onStartedEncoding();
         }
 
         ByteBuffer[] encoderInputBuffers = encoder.getInputBuffers();
@@ -208,15 +214,16 @@ public class EncoderThread implements Runnable {
 
                 boolean isConfigData = ((chunk.flags & MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0);
                 if (isConfigData && mListener != null) {
-                    mListener.onConfigFrameAvailable(
-                            chunk, mWidth, mHeight, BIT_RATE_BPS, FRAME_RATE
-                    );
+                    String s = "[ "; for (byte b : encodedArray) s+=""+b+" "; s+="]";
+                    Log.d(TAG, "config data: "+s);
+                    mListener.onConfigBytes(chunk, mWidth, mHeight, BIT_RATE_BPS, FRAME_RATE);
                 }
                 else if (mListener != null){
-                     mListener.onEncodedDataAvailable(chunk);
+                     mListener.onEncodedChunk(chunk);
                 }
 
-                if (VERBOSE) Log.d(TAG, "Encoded buffer size: "+info.size+" " +
+                if (VERBOSE)
+                    Log.d(TAG, "Encoded buffer size: "+info.size+" " +
                         "TOTAL Encoded size: "+encodedSize);
                 if ((info.flags & MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0) {
                     if (VERBOSE) Log.i(TAG, "First coded packet ");
@@ -230,7 +237,9 @@ public class EncoderThread implements Runnable {
         encoder.stop();
         encoder.release();
         Log.i(TAG, "Encoder Released!! Closing.");
-        if (mListener != null) mListener.onStopped();
+        if (mListener != null) {
+            mListener.onStoppedEncoding();
+        }
     }
 
 

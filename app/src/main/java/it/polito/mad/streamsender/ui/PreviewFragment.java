@@ -5,6 +5,7 @@ import android.Manifest;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.hardware.Camera;
+import android.os.Build;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
 import android.support.v4.app.Fragment;
@@ -20,9 +21,13 @@ import java.util.List;
 
 import it.polito.mad.streamsender.R;
 import it.polito.mad.streamsender.Util;
-import it.polito.mad.streamsender.record.Camera1RecorderImpl;
-import it.polito.mad.streamsender.record.EncoderThread;
-import it.polito.mad.streamsender.record.VideoChunks;
+import it.polito.mad.streamsender.encoding.EncodingCallback;
+import it.polito.mad.streamsender.encoding.SimpleEncodingCallback;
+import it.polito.mad.streamsender.record.Camera1Recorder;
+import it.polito.mad.streamsender.record.MediaCodecRecorderImpl;
+import it.polito.mad.streamsender.encoding.EncoderThread;
+import it.polito.mad.streamsender.encoding.VideoChunks;
+import it.polito.mad.streamsender.record.NativeRecorderImpl;
 import it.polito.mad.streamsender.websocket.WSClientImpl;
 
 public class PreviewFragment extends Fragment {
@@ -31,13 +36,15 @@ public class PreviewFragment extends Fragment {
 
     private static final int CAMERA_PERMISSION_REQUEST_CODE = 1;
     private static final String[] PERMISSIONS = new String[]{ Manifest.permission.CAMERA };
-    private boolean mCameraPermissionGranted = false;
+    //By default, camera permission is granted.
+    //If current API is >= 23, it is denied until user explicitly grants it
+    private boolean mCameraPermissionGranted = (Build.VERSION.SDK_INT < 23);
 
     private SurfaceView preview;
     private Button rec, pause, stop, connect, switchQuality;
     private SharedPreferences mPreferences;
 
-    private Camera1RecorderImpl mRecorder;
+    private Camera1Recorder mRecorder;
 
     private WSClientImpl mClient;
     private WSClientImpl.Listener mWebSocketListener = new WSClientImpl.Listener() {
@@ -72,7 +79,7 @@ public class PreviewFragment extends Fragment {
             pause.setEnabled(false);
             stop.setEnabled(false);
             String message = closedByServer ? "closed by server" : "closed";
-            Toast.makeText(getContext(), "Connection " + message, Toast.LENGTH_SHORT).show();
+            Toast.makeText(getActivity(), "Connection " + message, Toast.LENGTH_SHORT).show();
         }
 
         @Override
@@ -83,24 +90,18 @@ public class PreviewFragment extends Fragment {
         }
 
     };
-    private EncoderThread.Listener mEncoderListener = new EncoderThread.Listener() {
+    private EncodingCallback mEncoderListener = new SimpleEncodingCallback() {
         @Override
-        public void onConfigFrameAvailable(VideoChunks.Chunk chunk, int width, int height, int encodeBps, int frameRate) {
+        public void onConfigBytes(VideoChunks.Chunk chunk, int width, int height, int encodeBps, int frameRate) {
             if (mClient.isOpen()) {
                 mClient.sendConfigBytes(chunk.data, width, height, encodeBps, frameRate);
             }
         }
-
         @Override
-        public void onEncodedDataAvailable(VideoChunks.Chunk chunk) {
+        public void onEncodedChunk(VideoChunks.Chunk chunk) {
             if (mClient.isOpen()) {
                 mClient.sendStreamBytes(chunk);
             }
-        }
-
-        @Override
-        public void onStopped() {
-
         }
     };
 
@@ -110,14 +111,76 @@ public class PreviewFragment extends Fragment {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        mPreferences = PreferenceManager.getDefaultSharedPreferences(getContext());
         mClient = new WSClientImpl(mWebSocketListener);
-        mRecorder = new Camera1RecorderImpl(getContext());
+        mRecorder = new NativeRecorderImpl(getContext());
+    }
+
+    @Override
+    public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
+        return inflater.inflate(R.layout.fragment_preview, container, false);
+    }
+
+    @Override
+    public void onViewCreated(View view, Bundle savedInstanceState) {
+        super.onViewCreated(view, savedInstanceState);
+        preview = (SurfaceView) view.findViewById(R.id.preview);
+        rec = (Button) view.findViewById(R.id.button_rec);
+        pause = (Button) view.findViewById(R.id.button_pause);
+        stop = (Button) view.findViewById(R.id.button_stop);
+        connect = (Button) view.findViewById(R.id.button_connect);
+        switchQuality = (Button) view.findViewById(R.id.button_quality_switch);
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        if (!hasPermissions(PERMISSIONS)){
+            requestPermissions(PERMISSIONS, CAMERA_PERMISSION_REQUEST_CODE);
+            return;
+        }
+        else{
+            mCameraPermissionGranted = true;
+            setupCameraRecorder();
+        }
+    }
+
+    @Override
+    public void onPause() {
+        if (mCameraPermissionGranted) {
+            mRecorder.stopRecording();
+            mRecorder.releaseCamera();
+            mRecorder.setEncoderListener(null);
+        }
+        if (mClient.isOpen()){
+            mClient.closeConnection();
+        }
+        super.onPause();
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == CAMERA_PERMISSION_REQUEST_CODE){
+            for (int i=0; i<permissions.length; i++){
+                if (permissions[i].equals(Manifest.permission.CAMERA)){
+                    if (grantResults[i] == PackageManager.PERMISSION_GRANTED){
+                        mCameraPermissionGranted = true;
+                        //setupCameraRecorder();
+                    }
+                    else {
+                        mCameraPermissionGranted = false;
+                        Toast.makeText(getContext(), "Camera permission denied", Toast.LENGTH_SHORT).show();
+                    }
+                }
+            }
+        }
     }
 
     private void setupCameraRecorder(){
         mRecorder.acquireCamera();
         mRecorder.setSurfaceView(preview);
-        mRecorder.registerEncoderListener(mEncoderListener);
+        mRecorder.setEncoderListener(mEncoderListener);
         rec.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -159,70 +222,12 @@ public class PreviewFragment extends Fragment {
         });
     }
 
-
-    @Override
-    public void onPause() {
-        if (mCameraPermissionGranted) {
-            mRecorder.stopRecording();
+    private boolean hasPermissions(String[] permissions){
+        for (String perm : permissions){
+            if (ContextCompat.checkSelfPermission(getActivity(), perm) != PackageManager.PERMISSION_GRANTED)
+                return false;
         }
-        if (mClient.isOpen()){
-            mClient.closeConnection();
-        }
-        mRecorder.releaseCamera();
-        mRecorder.unregisterEncoderListener();
-        super.onPause();
-    }
-
-    @Override
-    public View onCreateView(LayoutInflater inflater, ViewGroup container,
-                             Bundle savedInstanceState) {
-        mPreferences = PreferenceManager.getDefaultSharedPreferences(getContext());
-        return inflater.inflate(R.layout.fragment_preview, container, false);
-    }
-
-    @Override
-    public void onViewCreated(View view, Bundle savedInstanceState) {
-        super.onViewCreated(view, savedInstanceState);
-        preview = (SurfaceView) view.findViewById(R.id.preview);
-        rec = (Button) view.findViewById(R.id.button_rec);
-        pause = (Button) view.findViewById(R.id.button_pause);
-        stop = (Button) view.findViewById(R.id.button_stop);
-        connect = (Button) view.findViewById(R.id.button_connect);
-        switchQuality = (Button) view.findViewById(R.id.button_quality_switch);
-
-        for (String permission : PERMISSIONS){
-            String[] singlePermissionArray = { permission };
-            if (hasPermission(permission)){
-                int[] singleGrantArray = { PackageManager.PERMISSION_GRANTED };
-                onRequestPermissionsResult(
-                        CAMERA_PERMISSION_REQUEST_CODE,
-                        singlePermissionArray,
-                        singleGrantArray
-                );
-            }
-            else{
-                requestPermissions(singlePermissionArray, CAMERA_PERMISSION_REQUEST_CODE);
-            }
-        }
-    }
-
-    @Override
-    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == CAMERA_PERMISSION_REQUEST_CODE){
-            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED){
-                mCameraPermissionGranted = true;
-                setupCameraRecorder();
-            }
-            else {
-                Toast.makeText(getContext(), "Camera permission denied", Toast.LENGTH_SHORT).show();
-            }
-        }
-    }
-
-    private boolean hasPermission(String permission){
-        return ContextCompat.checkSelfPermission(getActivity(), permission)
-                == PackageManager.PERMISSION_GRANTED;
+        return true;
     }
 
 }

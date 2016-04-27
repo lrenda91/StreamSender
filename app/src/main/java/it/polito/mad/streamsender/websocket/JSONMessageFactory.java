@@ -6,7 +6,7 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import it.polito.mad.streamsender.record.VideoChunks;
+import it.polito.mad.streamsender.encoding.VideoChunks;
 
 /**
  * Created by luigi on 24/01/16.
