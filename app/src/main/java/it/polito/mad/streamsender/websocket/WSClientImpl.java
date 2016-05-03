@@ -35,7 +35,7 @@ public class WSClientImpl extends WebSocketAdapter implements WSClient {
         void onConnectionEstablished(String uri);
         void onConnectionClosed(boolean closedByServer);
         void onConnectionError(Exception e);
-        void onResetReceived(int w, int h);
+        void onResetReceived(int w, int h, int kbps);
     }
 
     protected WebSocket mWebSocket;
@@ -84,12 +84,14 @@ public class WSClientImpl extends WebSocketAdapter implements WSClient {
         mWebSocket.sendClose();
     }
 
-    public void sendHelloMessage(String device, String[] qualities, int currentIdx){
+    public void sendHelloMessage(String device, String[] qualities, int actualSizeIdx,
+        int[] bitrates, int actualBitrateIdx){
         try {
-            JSONObject configMsg = JSONMessageFactory.createHelloMessage(device, qualities, currentIdx);
+            JSONObject configMsg = JSONMessageFactory.createHelloMessage(device, qualities, actualSizeIdx,
+                    bitrates, actualBitrateIdx);
             mWebSocket.sendText(configMsg.toString());
         } catch (JSONException e) {
-
+            Log.e(TAG, e.getMessage());
         }
     }
 
@@ -99,7 +101,7 @@ public class WSClientImpl extends WebSocketAdapter implements WSClient {
             mWebSocket.sendText(configMsg.toString());
 
         } catch (JSONException e) {
-
+            Log.e(TAG, e.getMessage());
         }
     }
 
@@ -109,7 +111,7 @@ public class WSClientImpl extends WebSocketAdapter implements WSClient {
             mWebSocket.sendText(obj.toString());
         }
         catch(JSONException e){
-
+            Log.e(TAG, e.getMessage());
         }
     }
 
@@ -134,15 +136,10 @@ public class WSClientImpl extends WebSocketAdapter implements WSClient {
         });
     }
 
-    @Override
-    public void onFrameSent(WebSocket websocket, WebSocketFrame frame) throws Exception {
-        super.onFrameSent(websocket, frame);
-
-    }
 
     @Override
     public void onDisconnected(WebSocket websocket, WebSocketFrame serverCloseFrame, WebSocketFrame clientCloseFrame, final boolean closedByServer) throws Exception {
-        Log.d("WS", "disconnected by server: " + closedByServer);
+        if (VERBOSE) Log.d("WS", "disconnected by server: " + closedByServer);
         mMainHandler.post(new Runnable() {
             @Override
             public void run() {
@@ -157,13 +154,16 @@ public class WSClientImpl extends WebSocketAdapter implements WSClient {
             JSONObject obj = new JSONObject(text);
             if (obj.has("type")){
                 if (obj.get("type").equals("reset")){
-                    if (obj.has("width") && obj.has("height")){
+                    if (obj.has("width")
+                            && obj.has("height")
+                            && obj.has("bitrate")){
                         final int width = obj.getInt("width");
                         final int height = obj.getInt("height");
+                        final int bitrate = obj.getInt("bitrate");
                         mMainHandler.post(new Runnable() {
                             @Override
                             public void run() {
-                                if (mListener != null) mListener.onResetReceived(width, height);
+                                if (mListener != null) mListener.onResetReceived(width, height, bitrate);
                             }
                         });
                     }

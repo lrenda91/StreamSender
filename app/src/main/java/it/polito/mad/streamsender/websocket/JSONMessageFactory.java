@@ -27,6 +27,8 @@ public class JSONMessageFactory {
     public static final String DEVICE_KEY = "device";
     public static final String QUALITIES_KEY = "qualities";
     public static final String CURRENT_QUALITY_KEY = "current";
+    public static final String BITRATES_KEY = "bitrates";
+    public static final String CURRENT_BITRATE_KEY = "currentBitrate";
 
     private JSONMessageFactory(){}
 
@@ -37,16 +39,23 @@ public class JSONMessageFactory {
     }
 
     public static JSONObject createHelloMessage(String device, String[] qualities,
-                                                int currentIdx) throws JSONException {
+                                                int actualSizeIdx,
+                                                int[] bitRates, int actualBitrateIdx) throws JSONException {
         JSONObject msg = get();
         msg.put(TYPE_KEY, "hello");
         msg.put(DEVICE_KEY, device);
-        JSONArray array = new JSONArray();
+        JSONArray sizesArray = new JSONArray();
         for (String s : qualities) {
-            array.put(s);
+            sizesArray.put(s);
         }
-        msg.put(QUALITIES_KEY, array);
-        msg.put(CURRENT_QUALITY_KEY, qualities[currentIdx]);
+        msg.put(QUALITIES_KEY, sizesArray);
+        msg.put(CURRENT_QUALITY_KEY, qualities[actualSizeIdx]);
+        JSONArray bitRatesArray = new JSONArray();
+        for (int br : bitRates) {
+            bitRatesArray.put(br);
+        }
+        msg.put(BITRATES_KEY, bitRatesArray);
+        msg.put(CURRENT_BITRATE_KEY, bitRates[actualBitrateIdx]);
         return msg;
     }
 

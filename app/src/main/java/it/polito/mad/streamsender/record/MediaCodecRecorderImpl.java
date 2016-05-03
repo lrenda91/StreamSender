@@ -9,8 +9,9 @@ import android.view.ViewGroup;
 import java.io.IOException;
 
 import it.polito.mad.streamsender.Util;
-import it.polito.mad.streamsender.encoding.EncoderThread;
+import it.polito.mad.streamsender.encoding.MediaCodecEncoderThread;
 import it.polito.mad.streamsender.encoding.EncodingCallback;
+import it.polito.mad.streamsender.encoding.Params;
 
 /**
  * Created by luigi on 24/02/16.
@@ -23,7 +24,7 @@ public class MediaCodecRecorderImpl implements Camera1Recorder,Camera1ManagerImp
 
     private Context mContext;
     private Camera1Manager mCameraManager;
-    private EncoderThread mEncoderThread;
+    private MediaCodecEncoderThread mEncoderThread;
 
     public MediaCodecRecorderImpl(Context context){
         if (context == null){
@@ -31,7 +32,7 @@ public class MediaCodecRecorderImpl implements Camera1Recorder,Camera1ManagerImp
         }
         mContext = context;
         mCameraManager = new Camera1ManagerImpl(context, this);
-        mEncoderThread = new EncoderThread(null);
+        mEncoderThread = new MediaCodecEncoderThread(null);
     }
 
     @Override
@@ -116,13 +117,12 @@ public class MediaCodecRecorderImpl implements Camera1Recorder,Camera1ManagerImp
         if (wasRecording){
             mEncoderThread.waitForTermination();
             startRecording();
-            mCameraManager.enableFrameCapture();
         }
     }
 
     @Override
-    public void switchToVideoQuality(int width, int height){
-        Camera.Size size = mCameraManager.getCameraInstance().new Size(width, height);
+    public void switchToVideoQuality(Params params){
+        Camera.Size size = mCameraManager.getCameraInstance().new Size(params.width(), params.height());
         mCameraManager.disableFrameCapture();
         mCameraManager.stopPreview();
 
@@ -141,7 +141,7 @@ public class MediaCodecRecorderImpl implements Camera1Recorder,Camera1ManagerImp
         if (wasRecording){
             mEncoderThread.waitForTermination();
             startRecording();
-            mCameraManager.enableFrameCapture();
+            //mCameraManager.enableFrameCapture();
         }
     }
 

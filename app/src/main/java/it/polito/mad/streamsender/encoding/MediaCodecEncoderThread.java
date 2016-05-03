@@ -16,18 +16,7 @@ import it.polito.mad.streamsender.Util;
  * Created by luigi on 21/01/16.
  */
 @SuppressWarnings("deprecation")
-public class EncoderThread implements Runnable {
-
-    public interface Listener {
-        void onConfigFrameAvailable(VideoChunks.Chunk chunk,
-                                    int width,
-                                    int height,
-                                    int encodeBps,
-                                    int frameRate);
-        void onEncodedDataAvailable(VideoChunks.Chunk chunk);
-        void onStopped();
-        //void onEncodedDataAvailable(VideoChunks.Chunk chunk, boolean configBytes);
-    }
+public class MediaCodecEncoderThread implements Runnable {
 
     private static final String TAG = "ENCODER";
     private static final boolean VERBOSE = false;
@@ -46,7 +35,7 @@ public class EncoderThread implements Runnable {
     public EncodingCallback getListener(){
         return mListener;
     }
-    public EncoderThread(EncodingCallback listener){
+    public MediaCodecEncoderThread(EncodingCallback listener){
         mListener = listener;
     }
 
@@ -93,11 +82,6 @@ public class EncoderThread implements Runnable {
     public void submitAccessUnit(byte[] data){
         mRawFrames.addChunk(data, 0, 0);
     }
-
-    /*public void drain(){
-        mRawFrames.clear();
-    }
-    */
 
     @Override
     public void run() {

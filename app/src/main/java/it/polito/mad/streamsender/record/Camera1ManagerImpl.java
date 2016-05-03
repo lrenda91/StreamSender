@@ -28,7 +28,7 @@ public class Camera1ManagerImpl implements Camera1Manager {
     }
 
     private static final String TAG = "Camera";
-    private static final boolean VERBOSE = true;
+    private static final boolean VERBOSE = false;
 
     private static final int sRatioWidth = 4;
     private static final int sRatioHeight = 3;
@@ -74,6 +74,7 @@ public class Camera1ManagerImpl implements Camera1Manager {
         if (VERBOSE) Log.d(TAG, "Camera acquired");
 
         Camera.Parameters parameters = mCamera.getParameters();
+        parameters.setPreviewFrameRate(30);
         int chosen = -1;
         for (int format : parameters.getSupportedPreviewFormats()){
             try{
@@ -111,7 +112,7 @@ public class Camera1ManagerImpl implements Camera1Manager {
         });
         if (VERBOSE) Util.logCameraSizes(TAG, mSuitableSizes);
 
-        switchToSize(getCurrentSize());
+        //switchToSize(getCurrentSize());
     }
 
     @Override

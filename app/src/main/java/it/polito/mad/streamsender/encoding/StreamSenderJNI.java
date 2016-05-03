@@ -1,5 +1,7 @@
 package it.polito.mad.streamsender.encoding;
 
+import android.util.Log;
+
 /**
  * Created by luigi on 12/04/16.
  */
@@ -32,5 +34,10 @@ public class StreamSenderJNI {
     public static native String hello();
 
     public static native byte[][] nativeGetHeaders();
+
+    public static void nativeCrashed(String msg){
+        Log.e("JNI", "crash: "+msg);
+        new RuntimeException("crashed here: ").printStackTrace();
+    }
 
 }

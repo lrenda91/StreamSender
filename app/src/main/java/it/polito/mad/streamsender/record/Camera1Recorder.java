@@ -3,6 +3,7 @@ package it.polito.mad.streamsender.record;
 import android.view.SurfaceView;
 
 import it.polito.mad.streamsender.encoding.EncodingCallback;
+import it.polito.mad.streamsender.encoding.Params;
 
 /**
  * Created by luigi on 24/02/16.
@@ -23,7 +24,7 @@ public interface Camera1Recorder {
 
     void switchToNextVideoQuality();
 
-    void switchToVideoQuality(int width, int height);
+    void switchToVideoQuality(Params params);
 
     void releaseCamera();
 
