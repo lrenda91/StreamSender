@@ -1,16 +1,17 @@
 package it.polito.mad.streamsender;
 
-import android.content.Context;
 import android.net.TrafficStats;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
-import android.widget.TextView;
+
+import java.net.Socket;
+import java.net.SocketException;
 
 /**
  * Created by luigi on 24/02/16.
  */
-public class NetworkMonitor {
+public class NetworkMonitor2 {
 
     public interface Callback {
         void onData(long txBytes, long rxBytes);
@@ -19,13 +20,15 @@ public class NetworkMonitor {
     }
 
     private static final boolean VERBOSE = true;
-    private static final String TAG = "NetMonitor";
+    private static final String TAG = "NetMonitor2";
 
     private int mAppUID = android.os.Process.myUid();
     private long mStartRX, mStartTX, mPreviousRX, mPreviousTX;
     private boolean mRunning = false;
     private Handler mHandler = new Handler(Looper.getMainLooper());
     private Callback mCallback;
+
+    private Socket mSocket;
 
     private final Runnable mRunnable = new Runnable() {
         public void run() {
@@ -43,11 +46,11 @@ public class NetworkMonitor {
         }
     };
 
-    public NetworkMonitor(Callback callback){
+    public NetworkMonitor2(Callback callback){
         mCallback = callback;
     }
 
-    public void start(){
+    public void start(Socket socket) throws SocketException {
         mPreviousRX = 0L;
         mPreviousTX = 0L;
         mStartTX = TrafficStats.getUidTxBytes(mAppUID);
@@ -63,7 +66,7 @@ public class NetworkMonitor {
         if (VERBOSE) Log.d(TAG, "Started");
     }
 
-    public void stop(){
+    public void stop() throws SocketException {
         mHandler.removeCallbacks(mRunnable);
         mRunning = false;
         if (VERBOSE) Log.d(TAG, "Stopped");
@@ -80,7 +83,8 @@ public class NetworkMonitor {
             @Override
             public void run() {
                 mExpectedSentBytes += sentBytes;
-                Log.d(TAG, "expected: "+mExpectedSentBytes+" ; effectively sent: "+(TrafficStats.getUidTxBytes(mAppUID) - mStartTX));
+                long d = (TrafficStats.getUidTxBytes(mAppUID) - mStartTX);
+                Log.d(TAG, "expected: "+mExpectedSentBytes+" ; effectively sent: "+d+" diff="+(mExpectedSentBytes-d));
             }
         });
     }

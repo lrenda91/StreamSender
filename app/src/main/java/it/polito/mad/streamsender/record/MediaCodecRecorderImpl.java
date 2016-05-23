@@ -1,7 +1,6 @@
 package it.polito.mad.streamsender.record;
 
 import android.content.Context;
-import android.hardware.Camera;
 import android.util.Log;
 import android.view.SurfaceView;
 import android.view.ViewGroup;
@@ -17,20 +16,13 @@ import it.polito.mad.streamsender.encoding.Params;
  * Created by luigi on 24/02/16.
  */
 @SuppressWarnings("deprecation")
-public class MediaCodecRecorderImpl implements Camera1Recorder,Camera1ManagerImpl.Callback {
+public class MediaCodecRecorderImpl extends AbsCamcorder implements Camera1ManagerImpl.Callback {
 
-    private static final int sRatioHeight = 4;
-    private static final int sRatioWidth = 3;
-
-    private Context mContext;
     private Camera1Manager mCameraManager;
     private MediaCodecEncoderThread mEncoderThread;
 
     public MediaCodecRecorderImpl(Context context){
-        if (context == null){
-            throw new IllegalArgumentException("Context mustn't be null");
-        }
-        mContext = context;
+        super(context);
         mCameraManager = new Camera1ManagerImpl(context, this);
         mEncoderThread = new MediaCodecEncoderThread(null);
     }
@@ -40,38 +32,11 @@ public class MediaCodecRecorderImpl implements Camera1Recorder,Camera1ManagerImp
         mEncoderThread.setListener(listener);
     }
 
-    public Camera1Manager getCameraManager(){
-        return mCameraManager;
-    }
-
-    @Override
-    public void acquireCamera() {
-        mCameraManager.acquireCamera();
-    }
-
-    @Override
-    public void setSurfaceView(final SurfaceView surfaceView) {
-        surfaceView.post(new Runnable() {
-            @Override
-            public void run() {
-                int measuredHeight = surfaceView.getMeasuredHeight();
-                ViewGroup.LayoutParams lp = surfaceView.getLayoutParams();
-                lp.width = measuredHeight * sRatioWidth / sRatioHeight;
-                surfaceView.setLayoutParams(lp);
-                try {
-                    mCameraManager.setPreviewSurface(surfaceView.getHolder());
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
-        });
-    }
-
     @Override
     public void onCameraCapturedFrame(byte[] frame) {
-        Camera.Size size = mCameraManager.getCurrentSize();
+        Size size = mCameraManager.getCurrentSize();
         int format = mCameraManager.getImageFormat();
-        mEncoderThread.submitAccessUnit(Util.swapColors(frame, size.width, size.height, format));
+        mEncoderThread.submitAccessUnit(Util.swapColors(frame, size.getWidth(), size.getHeight(), format));
     }
 
     @Override
@@ -81,8 +46,8 @@ public class MediaCodecRecorderImpl implements Camera1Recorder,Camera1ManagerImp
 
     @Override
     public void startRecording() {
-        Camera.Size current = mCameraManager.getCurrentSize();
-        mEncoderThread.startThread(current.width, current.height);
+        Size current = mCameraManager.getCurrentSize();
+        mEncoderThread.startThread(current.getWidth(), current.getHeight());
 
         mCameraManager.enableFrameCapture();
         mCameraManager.startPreview();
@@ -104,25 +69,9 @@ public class MediaCodecRecorderImpl implements Camera1Recorder,Camera1ManagerImp
     }
 
     @Override
-    public void switchToNextVideoQuality() {
-        mCameraManager.disableFrameCapture();
-        mCameraManager.stopPreview();
-
-        boolean wasRecording = (mEncoderThread.isRunning());
-        mEncoderThread.requestStop();
-
-        mCameraManager.switchToMajorSize();
-        mCameraManager.startPreview();
-
-        if (wasRecording){
-            mEncoderThread.waitForTermination();
-            startRecording();
-        }
-    }
-
-    @Override
     public void switchToVideoQuality(Params params){
-        Camera.Size size = mCameraManager.getCameraInstance().new Size(params.width(), params.height());
+        mCurrentParams = params;
+        Size size = new Size(params.width(), params.height());
         mCameraManager.disableFrameCapture();
         mCameraManager.stopPreview();
 
@@ -141,13 +90,7 @@ public class MediaCodecRecorderImpl implements Camera1Recorder,Camera1ManagerImp
         if (wasRecording){
             mEncoderThread.waitForTermination();
             startRecording();
-            //mCameraManager.enableFrameCapture();
         }
-    }
-
-    @Override
-    public void releaseCamera() {
-        mCameraManager.releaseCamera();
     }
 
 }

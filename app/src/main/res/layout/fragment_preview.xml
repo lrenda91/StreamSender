@@ -79,6 +79,7 @@
                 android:layout_height="match_parent" />
             <SeekBar
                 android:id="@+id/resolution_seek_bar"
+                android:progress="1"
                 android:layout_weight="3"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content" />
@@ -98,6 +99,7 @@
                 android:layout_height="match_parent" />
             <SeekBar
                 android:id="@+id/bitrate_seek_bar"
+                android:progress="1"
                 android:layout_weight="3"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content" />

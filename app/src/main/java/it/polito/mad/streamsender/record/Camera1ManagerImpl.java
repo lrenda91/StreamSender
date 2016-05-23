@@ -58,7 +58,7 @@ public class Camera1ManagerImpl implements Camera1Manager {
     private Camera mCamera;
     private Callback mCallback;
 
-    private List<Camera.Size> mSuitableSizes;
+    private List<Size> mSuitableSizes;
     private int mSuitableSizesIndex = 0;
 
     public Camera1ManagerImpl(Context context, Callback callback){
@@ -74,7 +74,7 @@ public class Camera1ManagerImpl implements Camera1Manager {
         if (VERBOSE) Log.d(TAG, "Camera acquired");
 
         Camera.Parameters parameters = mCamera.getParameters();
-        parameters.setPreviewFrameRate(30);
+        parameters.setPreviewFrameRate(25);
         int chosen = -1;
         for (int format : parameters.getSupportedPreviewFormats()){
             try{
@@ -97,16 +97,16 @@ public class Camera1ManagerImpl implements Camera1Manager {
         mSuitableSizes = new LinkedList<>();
         for (Camera.Size s : mCamera.getParameters().getSupportedPreviewSizes()){
             if ((s.width * sRatioHeight / sRatioWidth) == s.height){
-                mSuitableSizes.add(s);
+                mSuitableSizes.add(new Size(s.width, s.height));
             }
         }
-        Collections.sort(mSuitableSizes, new Comparator<Camera.Size>() {
+        Collections.sort(mSuitableSizes, new Comparator<Size>() {
             @Override
-            public int compare(Camera.Size lhs, Camera.Size rhs) {
-                if (lhs.width > rhs.width) return 1;
-                if (lhs.width < rhs.width) return -1;
-                if (lhs.height > rhs.height) return 1;
-                if (lhs.height < rhs.height) return -1;
+            public int compare(Size lhs, Size rhs) {
+                if (lhs.getWidth() > rhs.getWidth()) return 1;
+                if (lhs.getWidth() < rhs.getWidth()) return -1;
+                if (lhs.getHeight() > rhs.getHeight()) return 1;
+                if (lhs.getHeight() < rhs.getHeight()) return -1;
                 return 0;
             }
         });
@@ -121,12 +121,12 @@ public class Camera1ManagerImpl implements Camera1Manager {
     }
 
     @Override
-    public List<Camera.Size> getSuitableSizes() {
+    public List<Size> getSuitableSizes() {
         return mSuitableSizes;
     }
 
     @Override
-    public Camera.Size getCurrentSize() {
+    public Size getCurrentSize() {
         return mSuitableSizes.get(mSuitableSizesIndex);
     }
 
@@ -144,14 +144,14 @@ public class Camera1ManagerImpl implements Camera1Manager {
     }
 
     @Override
-    public void switchToSize(Camera.Size newSize) throws IllegalArgumentException{
+    public void switchToSize(Size newSize) throws IllegalArgumentException{
         int idx = mSuitableSizes.indexOf(newSize);
         if (idx < 0){
             throw new IllegalArgumentException("Illegal size: "+Util.sizeToString(newSize));
         }
         mSuitableSizesIndex = idx;
-        int width = newSize.width;
-        int height = newSize.height;
+        int width = newSize.getWidth();
+        int height = newSize.getHeight();
         resizeBuffers(width, height);
         Camera.Parameters parameters = mCamera.getParameters();
         parameters.setPreviewSize(width, height);

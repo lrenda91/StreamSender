@@ -16,17 +16,17 @@ public interface Camera1Manager {
 
     Camera getCameraInstance();
 
-    List<Camera.Size> getSuitableSizes();
+    List<Size> getSuitableSizes();
 
     int getImageFormat();
 
-    Camera.Size getCurrentSize();
+    Size getCurrentSize();
 
     void switchToMinorSize();
 
     void switchToMajorSize();
 
-    void switchToSize(Camera.Size newSize) throws IllegalArgumentException;
+    void switchToSize(Size newSize) throws IllegalArgumentException;
 
     void setPreviewSurface(SurfaceHolder surfaceHolder) throws IOException;
 

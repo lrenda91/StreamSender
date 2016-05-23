@@ -1,5 +1,6 @@
 package it.polito.mad.streamsender.record;
 
+import android.util.Size;
 import android.view.SurfaceView;
 
 import it.polito.mad.streamsender.encoding.EncodingCallback;
@@ -8,11 +9,9 @@ import it.polito.mad.streamsender.encoding.Params;
 /**
  * Created by luigi on 24/02/16.
  */
-public interface Camera1Recorder {
+public interface Camcorder {
 
-    void setEncoderListener(EncodingCallback listener);
-
-    void acquireCamera();
+    void openCamera();
 
     void setSurfaceView(SurfaceView surfaceView);
 
@@ -22,12 +21,12 @@ public interface Camera1Recorder {
 
     void stopRecording();
 
-    void switchToNextVideoQuality();
-
     void switchToVideoQuality(Params params);
 
-    void releaseCamera();
+    void closeCamera();
 
     Camera1Manager getCameraManager();
+
+    Params getCurrentParams();
 
 }

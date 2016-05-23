@@ -1,4 +1,4 @@
-package it.polito.mad.streamsender.websocket;
+package it.polito.mad.streamsender.net;
 
 import android.util.Base64;
 

@@ -1,20 +1,19 @@
-package it.polito.mad.streamsender.websocket;
+package it.polito.mad.streamsender.net;
 
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
 
-import com.neovisionaries.ws.client.WebSocket;
-import com.neovisionaries.ws.client.WebSocketAdapter;
-import com.neovisionaries.ws.client.WebSocketException;
-import com.neovisionaries.ws.client.WebSocketFactory;
-import com.neovisionaries.ws.client.WebSocketFrame;
+import it.polito.mad.streamsender.net.ws.*;
 
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.security.KeyPair;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicLong;
 
 import it.polito.mad.streamsender.encoding.VideoChunks;
 
@@ -26,16 +25,19 @@ public class WSClientImpl extends WebSocketAdapter implements WSClient {
 
     private static final boolean VERBOSE = true;
     private static final String TAG = "WSClient";
-    private static final String URI_FORMAT = "ws://%s:%d";
+    private static final String WS_URI_FORMAT = "ws://%s:%d";
+    private static final String HTTP_URI_FORMAT = "http://%s:%d";
 
     private Handler mMainHandler;
-    private String mConnectURI;
+    private String mServerIP;
+    private int mPort;
 
     public interface Listener {
         void onConnectionEstablished(String uri);
         void onConnectionClosed(boolean closedByServer);
         void onConnectionError(Exception e);
         void onResetReceived(int w, int h, int kbps);
+        void onBandwidthChange(int Kbps, double performancesPercentage);
     }
 
     protected WebSocket mWebSocket;
@@ -47,7 +49,7 @@ public class WSClientImpl extends WebSocketAdapter implements WSClient {
     }
 
     @Override
-    public WebSocket getSocket() {
+    public WebSocket getWebSocket() {
         return mWebSocket;
     }
 
@@ -57,11 +59,13 @@ public class WSClientImpl extends WebSocketAdapter implements WSClient {
 
     @Override
     public void connect(final String serverIP, final int port, final int timeout) {
-        mConnectURI = String.format(URI_FORMAT, serverIP, port);
+        mServerIP = serverIP;
+        mPort = port;
         new Thread(new Runnable() {
             @Override
             public void run() {
                 try{
+                    String mConnectURI = String.format(WS_URI_FORMAT, serverIP, port);
                     mWebSocket = new WebSocketFactory().createSocket(mConnectURI, timeout);
                     mWebSocket.addListener(WSClientImpl.this);
                     mWebSocket.connect();
@@ -108,7 +112,10 @@ public class WSClientImpl extends WebSocketAdapter implements WSClient {
     public void sendStreamBytes(final VideoChunks.Chunk chunk){
         try {
             JSONObject obj = JSONMessageFactory.createStreamMessage(chunk);
-            mWebSocket.sendText(obj.toString());
+            String text = obj.toString();
+            sumToSend.addAndGet(text.length());
+            contToSend.incrementAndGet();
+            mWebSocket.sendText(text);
         }
         catch(JSONException e){
             Log.e(TAG, e.getMessage());
@@ -117,6 +124,9 @@ public class WSClientImpl extends WebSocketAdapter implements WSClient {
 
     @Override
     public void onConnected(WebSocket websocket, Map<String, List<String>> headers) {
+        mMeasureThread = new Thread(mMeasureRunnable);
+        mMeasureThread.start();
+        final String mConnectURI = String.format(WS_URI_FORMAT, mServerIP, mPort);
         if (VERBOSE) Log.d(TAG, "Successfully connected to " + mConnectURI);
         mMainHandler.post(new Runnable() {
             @Override
@@ -139,6 +149,12 @@ public class WSClientImpl extends WebSocketAdapter implements WSClient {
 
     @Override
     public void onDisconnected(WebSocket websocket, WebSocketFrame serverCloseFrame, WebSocketFrame clientCloseFrame, final boolean closedByServer) throws Exception {
+        try{
+            mMeasureThread.interrupt();
+            mMeasureThread.join();
+            mMeasureThread = null;
+        }catch(InterruptedException e){}
+
         if (VERBOSE) Log.d("WS", "disconnected by server: " + closedByServer);
         mMainHandler.post(new Runnable() {
             @Override
@@ -171,4 +187,50 @@ public class WSClientImpl extends WebSocketAdapter implements WSClient {
             }
         }catch(JSONException e){}
     }
+
+    @Override
+    public void onFrameSent(WebSocket websocket, final WebSocketFrame frame) throws Exception {
+        super.onFrameSent(websocket, frame);
+        //try{Thread.sleep(50);}catch (InterruptedException e){}
+        sumSent.addAndGet(frame.getPayloadLength());
+        contSent.incrementAndGet();
+    }
+
+    private AtomicLong sumSent = new AtomicLong(0), contSent = new AtomicLong(0) ;
+    private AtomicLong sumToSend = new AtomicLong(0), contToSend = new AtomicLong(0);
+    private double mPercentage = 100;
+    private Thread mMeasureThread;
+
+    private Runnable mMeasureRunnable = new Runnable() {
+        @Override
+        public void run() {
+            long startTime = System.currentTimeMillis();
+            while (!Thread.interrupted()){
+                double toSendValue = (double) sumToSend.get();
+                double sentValue = (double) sumSent.get();
+                if (toSendValue > 0){
+                    double ratio = sentValue / toSendValue * 100.0;
+                    double percentage = Math.round(ratio * 100.0) / 100.0;
+                    double millis = (double) (System.currentTimeMillis() - startTime);
+                    double elapsedSeconds = millis / 1000.0;
+                    int Bps = (int)(sentValue / elapsedSeconds);
+                    final int Kbps = Bps * 8 / 1000;
+                    mPercentage = percentage;
+                    mMainHandler.post(new Runnable() {
+                        @Override
+                        public void run() {
+                            if (mListener != null) mListener.onBandwidthChange(Kbps, mPercentage);
+                        }
+                    });
+                }
+                try{
+                    Thread.sleep(5000);
+                } catch (InterruptedException e){
+                    break;
+                }
+            }
+            Log.d(TAG, "STOP");
+        }
+    };
+
 }

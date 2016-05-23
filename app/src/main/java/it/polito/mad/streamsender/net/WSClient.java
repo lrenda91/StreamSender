@@ -1,13 +1,13 @@
-package it.polito.mad.streamsender.websocket;
+package it.polito.mad.streamsender.net;
 
-import com.neovisionaries.ws.client.WebSocket;
+import it.polito.mad.streamsender.net.ws.WebSocket;
 
 /**
  * Created by luigi on 02/12/15.
  */
 public interface WSClient {
 
-    WebSocket getSocket();
+    WebSocket getWebSocket();
 
     void connect(String serverIP, int port, int timeout);
 

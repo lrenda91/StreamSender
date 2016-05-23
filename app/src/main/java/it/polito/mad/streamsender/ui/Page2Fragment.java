@@ -26,6 +26,10 @@ public class Page2Fragment extends Fragment {
         return fragment;
     }
 
+    public void a(int len){
+        mNetMonitor.notifyExpectedSentBytes(len);
+    }
+
     private NetworkMonitor mNetMonitor = new NetworkMonitor(new NetworkMonitor.Callback() {
         @Override
         public void onData(long txBytes, long rxBytes) {
@@ -34,8 +38,14 @@ public class Page2Fragment extends Fragment {
         }
         @Override
         public void onDataRate(long txBps, long rxBps) {
-            txRate.setText(txBps + " Bps");
-            rxRate.setText(rxBps + " Bps");
+            double txKbps = ((double) txBps)  //bytes per second
+                    * 8.0                       //bits per second
+                    / 1000.0;                   //Kbits per second
+            double rxKbps = ((double) rxBps)  //bytes per second
+                    * 8.0                       //bits per second
+                    / 1000.0;                   //Kbits per second
+            txRate.setText(txKbps + " Kbps");
+            rxRate.setText(rxKbps + " Kbps");
         }
         @Override
         public void onUnsupportedTrafficStats() {

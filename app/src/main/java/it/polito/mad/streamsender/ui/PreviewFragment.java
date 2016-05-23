@@ -4,7 +4,6 @@ package it.polito.mad.streamsender.ui;
 import android.Manifest;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
-import android.hardware.Camera;
 import android.os.Build;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
@@ -20,25 +19,30 @@ import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import java.util.Arrays;
+import java.net.Socket;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.ListIterator;
+import java.util.Set;
+import java.util.TreeSet;
 
 import it.polito.mad.streamsender.R;
 import it.polito.mad.streamsender.Util;
 import it.polito.mad.streamsender.encoding.EncodingCallback;
 import it.polito.mad.streamsender.encoding.SimpleEncodingCallback;
-import it.polito.mad.streamsender.record.Camera1Recorder;
+import it.polito.mad.streamsender.record.AbsCamcorder;
+import it.polito.mad.streamsender.record.Size;
 import it.polito.mad.streamsender.encoding.VideoChunks;
 import it.polito.mad.streamsender.record.NativeRecorderImpl;
 import it.polito.mad.streamsender.encoding.Params;
-import it.polito.mad.streamsender.websocket.WSClientImpl;
+import it.polito.mad.streamsender.net.WSClientImpl;
 
 @SuppressWarnings("deprecation")
 public class PreviewFragment extends Fragment {
 
     private static final String TAG = "PREVIEW";
-
-    private static final int[] BITRATES_KBPS = { 250, 500, 800, 1000 };
 
     private static final int CAMERA_PERMISSION_REQUEST_CODE = 1;
     private static final String[] PERMISSIONS = new String[]{ Manifest.permission.CAMERA };
@@ -47,31 +51,35 @@ public class PreviewFragment extends Fragment {
     private boolean mCameraPermissionGranted = (Build.VERSION.SDK_INT < 23);
 
     private SurfaceView preview;
-    private Button rec, pause, stop, connect, switchQuality;
+    private Button rec, pause, stop, connect;
     private SeekBar mResolutionSeekBar, mBitrateSeekBar;
     private TextView mResolutionLabel, mBitrateLabel;
     private SharedPreferences mPreferences;
 
-    private Camera1Recorder mRecorder;
+    private AbsCamcorder mRecorder;
+    private ArrayList<Size> mSizes;
+    private ArrayList<Integer> mBitRates;
 
     private WSClientImpl mClient;
     private WSClientImpl.Listener mWebSocketListener = new WSClientImpl.Listener() {
-
         @Override
         public void onConnectionEstablished(String uri) {
             rec.setEnabled(true);
             pause.setEnabled(true);
             stop.setEnabled(true);
             String device = Util.getCompleteDeviceName();
-            List<Camera.Size> sizes = mRecorder.getCameraManager().getSuitableSizes();
-            String[] qualities = new String[sizes.size()];
-            for (int i=0;i< sizes.size(); i++){
-                qualities[i] = Util.sizeToString(sizes.get(i));
+            String[] qualities = new String[mSizes.size()];
+            for (int i=0;i< mSizes.size(); i++){
+                qualities[i] = Util.sizeToString(mSizes.get(i));
             }
-            Camera.Size actualSize = mRecorder.getCameraManager().getCurrentSize();
-            int actualSizeIdx = sizes.indexOf(actualSize);
+            Size actualSize = mRecorder.getCameraManager().getCurrentSize();
+            int actualSizeIdx = mSizes.indexOf(actualSize);
+            int[] bitRates = new int[mBitRates.size()];
+            for (int i=0;i< mBitRates.size(); i++){
+                bitRates[i] = mBitRates.get(i);
+            }
             int actualBitrateIdx = mBitrateSeekBar.getProgress();
-            mClient.sendHelloMessage(device, qualities, actualSizeIdx, BITRATES_KBPS, actualBitrateIdx);
+            mClient.sendHelloMessage(device, qualities, actualSizeIdx, bitRates, actualBitrateIdx);
             Toast.makeText(getContext(), "Connected to "+uri, Toast.LENGTH_SHORT).show();
         }
 
@@ -79,7 +87,35 @@ public class PreviewFragment extends Fragment {
         public void onConnectionError(Exception e) {
             Toast.makeText(getContext(), "Can't connect to server: "
                     + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
 
+        @Override
+        public void onBandwidthChange(int Kbps, double performancesPercentage) {
+            Log.d(TAG, Kbps+" Kbps "+performancesPercentage+"%");
+            try{
+                if (performancesPercentage > 95.0){
+                    mRecorder.switchToHigherQuality();
+                }
+                else {
+                    mRecorder.switchToLowerQuality();
+                }
+            }catch(Exception ex){
+                Log.w(TAG, ex.getMessage());
+            }
+
+            /*Params targetParams = null;
+            ListIterator<Params> iterator = mRecorder.getPresets().listIterator();
+            while (iterator.hasPrevious()){
+                Params params = iterator.previous();
+                if (params.bitrate() <= Kbps){
+                    targetParams = params;
+                    break;
+                }
+            }Log.d(TAG, "SWITCH TO "+targetParams);
+            if (targetParams != null){
+
+                mRecorder.switchToVideoQuality(targetParams);
+            }*/
         }
 
         @Override
@@ -93,25 +129,17 @@ public class PreviewFragment extends Fragment {
 
         @Override
         public void onResetReceived(int w, int h, int kbps) {
-            String format = String.format("%dx%d %d Kbps",w,h,kbps);
-            Camera.Size size = mRecorder.getCameraManager().getCameraInstance().new Size(w,h);
-            int sizeIdx = mRecorder.getCameraManager().getSuitableSizes().indexOf(size);
-            int bitrateIdx = -1;
-            for (int i=0; i<BITRATES_KBPS.length; i++){
-                if (BITRATES_KBPS[i] == kbps){
-                    bitrateIdx = i;
-                    break;
-                }
-            }
+            String format = String.format("RESET: %dx%d %d Kbps",w,h,kbps);
+            Size size = new Size(w,h);
+            int sizeIdx = mSizes.indexOf(size);
+            int bitrateIdx = mBitRates.indexOf(kbps);
             if (bitrateIdx < 0 || sizeIdx < 0){
                 Log.e(TAG, "Cannot reset. "+format+" is not available for this device");
                 return;
             }
-            Params p = new Params.Builder().width(w).height(h).bitRate(kbps).build();
-            mRecorder.switchToVideoQuality(p);
-
             mResolutionSeekBar.setProgress(sizeIdx);
             mBitrateSeekBar.setProgress(bitrateIdx);
+            applyActualParams();
         }
 
     };
@@ -178,8 +206,8 @@ public class PreviewFragment extends Fragment {
     public void onPause() {
         if (mCameraPermissionGranted) {
             mRecorder.stopRecording();
-            mRecorder.releaseCamera();
             mRecorder.setEncoderListener(null);
+            mRecorder.closeCamera();
         }
         if (mClient.isOpen()){
             mClient.closeConnection();
@@ -206,9 +234,18 @@ public class PreviewFragment extends Fragment {
     }
 
     private void setupCameraRecorder(){
-        mRecorder.acquireCamera();
+        mRecorder.openCamera();
         mRecorder.setSurfaceView(preview);
         mRecorder.setEncoderListener(mEncoderListener);
+
+        Set<Size> sizesSet= new TreeSet<>();
+        Set<Integer> bitRatesSet = new TreeSet<>();
+        for (Params params : mRecorder.getPresets()){
+            sizesSet.add(new Size(params.width(), params.height()));
+            bitRatesSet.add(params.bitrate());
+        }
+        mSizes = new ArrayList<>(sizesSet);
+        mBitRates = new ArrayList<>(bitRatesSet);
 
         rec.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -241,21 +278,12 @@ public class PreviewFragment extends Fragment {
                 mClient.connect(ip, port, 2000);
             }
         });
-        /*switchQuality.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                //mRecorder.switchToNextVideoQuality();
-                //Camera.Size size = mRecorder.getCameraManager().getCurrentSize();
-                //Toast.makeText(getContext(), Util.sizeToString(size), Toast.LENGTH_SHORT).show();
-            }
-        });*/
 
-
-        mResolutionSeekBar.setMax(mRecorder.getCameraManager().getSuitableSizes().size()-1);
+        mResolutionSeekBar.setMax(mSizes.size()-1);
         mResolutionSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                Camera.Size size = mRecorder.getCameraManager().getSuitableSizes().get(progress);
+                Size size = mSizes.get(progress);
                 mResolutionLabel.setText(Util.sizeToString(size));
                 if (fromUser) applyActualParams();
             }
@@ -264,11 +292,11 @@ public class PreviewFragment extends Fragment {
             @Override
             public void onStopTrackingTouch(SeekBar seekBar) {}
         });
-        mBitrateSeekBar.setMax(BITRATES_KBPS.length-1);
+        mBitrateSeekBar.setMax(mBitRates.size()-1);
         mBitrateSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                int bitRate = BITRATES_KBPS[progress];
+                int bitRate = mBitRates.get(progress);
                 mBitrateLabel.setText(String.format("%d Kbps", bitRate));
                 if (fromUser) applyActualParams();
             }
@@ -283,16 +311,11 @@ public class PreviewFragment extends Fragment {
     }
 
     private void applyActualParams(){
-        Camera.Size size = mRecorder.getCameraManager().getSuitableSizes().get(mResolutionSeekBar.getProgress());
-        /*mResolutionLabel.setText(Util.sizeToString(size));
-        int bitRatesIdx = mBitrateSeekBar.getProgress();
-        int bitRate = BITRATES_KBPS[bitRatesIdx];
-        mBitrateLabel.setText(String.format("%d Kbps", bitRate));
-        */
-        int bitRate = BITRATES_KBPS[mBitrateSeekBar.getProgress()];
+        Size size = mSizes.get(mResolutionSeekBar.getProgress());
+        int bitRate = mBitRates.get(mBitrateSeekBar.getProgress());
         Params.Builder builder = new Params.Builder()
-                .width(size.width)
-                .height(size.height)
+                .width(size.getWidth())
+                .height(size.getHeight())
                 .bitRate(bitRate);
         mRecorder.switchToVideoQuality(builder.build());
     }

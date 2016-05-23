@@ -5,7 +5,19 @@ package it.polito.mad.streamsender.encoding;
  */
 public class Params {
 
-    private int mWidth = 0, mHeight = 0, mBitrate = 0, mFrameRate = 30; //by default
+    public static final Params[] PRESETS = new Params[]{
+            new Params(320, 240, 576, 25),      //240p
+            new Params(640, 480, 960, 25),      //480p
+            new Params(640, 480, 1216, 25),     //480pHQ
+            new Params(768, 576, 1408, 25),     //576p
+            new Params(768, 576, 1536, 25),     //576pHQ
+            new Params(960, 720, 1856, 25),     //720p
+            new Params(960, 720, 2432, 25),     //720pHQ
+            new Params(1440, 1080, 3712, 25),   //1080p
+            new Params(1440, 1080, 5632, 25),   //1080pHQ
+    };
+
+    private int mWidth = 0, mHeight = 0, mBitrate = 0, mFrameRate = 25; //by default
 
     private Params(int w, int h, int kbps, int fps){
         mWidth = w;
@@ -31,7 +43,7 @@ public class Params {
     }
 
     public static class Builder {
-        private int wid, hei, brate, fps;
+        private int wid = 0, hei = 0, brate = 0, fps = 25;
         public Builder width(int w){ wid = w; return this; }
         public Builder height(int h){ hei = h; return this; }
         public Builder bitRate(int kbps){ brate = kbps; return this; }
@@ -39,6 +51,18 @@ public class Params {
         public Params build(){
             return new Params(wid, hei, brate, fps);
         }
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (o == null) return false;
+        if (o == this) return true;
+        if (!(o instanceof Params)) return false;
+        Params other = (Params) o;
+        return this.mWidth == other.mWidth
+                && this.mHeight == other.mHeight
+                && this.mBitrate == other.mBitrate
+                && this.mFrameRate == other.mFrameRate;
     }
 
     @Override
