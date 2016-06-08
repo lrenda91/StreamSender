@@ -1,5 +1,10 @@
 package it.polito.mad.streamsender.encoding;
 
+import java.util.ArrayList;
+import java.util.List;
+
+import it.polito.mad.streamsender.record.Size;
+
 /**
  * Created by luigi on 29/04/16.
  */
@@ -13,9 +18,31 @@ public class Params {
             new Params(768, 576, 1536, 25),     //576pHQ
             new Params(960, 720, 1856, 25),     //720p
             new Params(960, 720, 2432, 25),     //720pHQ
-            new Params(1440, 1080, 3712, 25),   //1080p
-            new Params(1440, 1080, 5632, 25),   //1080pHQ
+            //new Params(1440, 1080, 3712, 25),   //1080p
+            //new Params(1440, 1080, 5632, 25),   //1080pHQ
     };
+
+    public static List<Params> getNearestPresets(Size size){   //il più grande tra i più piccoli
+        List<Params> nearest = new ArrayList<>(PRESETS.length);
+        //Params nearest = null;
+        boolean matchesSize = false;
+        for (Params preset : PRESETS){
+            if (preset.mWidth > size.getWidth()){
+                break;
+            }
+            //search among 'minor' sizes
+            if (!matchesSize){
+                //make sure only 'preset' will enter in the set, then update 'matchesSize'
+                nearest.clear();
+                nearest.add(preset);
+                matchesSize = (preset.mWidth == size.getWidth() && preset.mHeight == size.getHeight());
+            }
+            else{
+                nearest.add(preset);
+            }
+        }
+        return nearest;
+    }
 
     private int mWidth = 0, mHeight = 0, mBitrate = 0, mFrameRate = 25; //by default
 
@@ -40,6 +67,10 @@ public class Params {
 
     public int width() {
         return mWidth;
+    }
+
+    public Size getSize(){
+        return new Size(mWidth, mHeight);
     }
 
     public static class Builder {

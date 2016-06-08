@@ -5,6 +5,7 @@ import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
 import android.util.Log;
+import android.util.Pair;
 
 import it.polito.mad.streamsender.encoding.*;
 
@@ -17,8 +18,7 @@ public class NativeRecorderImpl extends AbsCamcorder implements Camera1ManagerIm
     private static final String TAG = "x264EncodingThread";
     private static final boolean VERBOSE = true;
 
-    private EncodingCallback mEncoderListener;
-    private boolean mIsRecording = false;
+    private boolean mIsRecording = false, mIsPaused = false;
 
     private HandlerThread mBackgroundThread;
     private Handler mBackgroundHandler;
@@ -29,14 +29,8 @@ public class NativeRecorderImpl extends AbsCamcorder implements Camera1ManagerIm
     }
 
     @Override
-    public void setEncoderListener(EncodingCallback listener) {
-        mEncoderListener = listener;
-    }
-
-    @Override
     public void openCamera() {
         super.openCamera();
-        Log.d(TAG, "params: "+mPresets.toString());
         startBackgroundThread();
     }
 
@@ -50,15 +44,12 @@ public class NativeRecorderImpl extends AbsCamcorder implements Camera1ManagerIm
                         mCurrentParams.height(),
                         frame,
                         mCurrentParams.bitrate());
-                //Log.d("jni", "encoded["+res.length+"]");
                 if (res == null){
-                    Log.e(TAG, "NULL");
                     return;
                 }
-                if (mEncoderListener != null){
-                    VideoChunks.Chunk chunk = new VideoChunks.Chunk(res, 0, System.currentTimeMillis());
-                    mEncoderListener.onEncodedChunk(chunk);
-                }
+                final VideoChunks.Chunk chunk = new VideoChunks.Chunk(res, 0, System.currentTimeMillis());
+
+                notifyEncodedChunkAvailable(chunk);
             }
         });
     }
@@ -68,27 +59,38 @@ public class NativeRecorderImpl extends AbsCamcorder implements Camera1ManagerIm
 
     @Override
     public void startRecording() {
-        mBackgroundHandler.post(new Runnable() {
-            @Override
-            public void run() {
-                byte[][] headers = StreamSenderJNI.nativeGetHeaders();
-                byte[] sps = headers[0], pps = headers[1];
-                byte[] merged = new byte[sps.length + pps.length];
-                System.arraycopy(sps, 0, merged, 0, sps.length);
-                System.arraycopy(pps, 0, merged, sps.length, pps.length);
+        if (!mIsPaused) {
+            mBackgroundHandler.post(new Runnable() {
+                @Override
+                public void run() {
+                    StreamSenderJNI.nativeApplyParams(
+                            mCurrentParams.width(),
+                            mCurrentParams.height(),
+                            mCurrentParams.bitrate()
+                    );
 
-                if (mEncoderListener != null){
-                    VideoChunks.Chunk chunk = new VideoChunks.Chunk(merged, 2, 0);
-                    mEncoderListener.onConfigBytes(
-                            chunk, mCurrentParams.width(), mCurrentParams.height(),
-                            mCurrentParams.bitrate()*1000, mCurrentParams.frameRate());
+                    byte[][] headers = StreamSenderJNI.nativeGetHeaders();
+                    byte[] sps = headers[0], pps = headers[1];
+                    byte[] merged = new byte[sps.length + pps.length];
+                    System.arraycopy(sps, 0, merged, 0, sps.length);
+                    System.arraycopy(pps, 0, merged, sps.length, pps.length);
+                    final VideoChunks.Chunk chunk = new VideoChunks.Chunk(merged, 2, 0);
+                    notifyConfigBytesAvailable(chunk,
+                            mCurrentParams.width(), mCurrentParams.height(),
+                            mCurrentParams.bitrate() * 1000, mCurrentParams.frameRate());
                 }
-            }
-        });
-
+            });
+        }
         mCameraManager.enableFrameCapture();
         mCameraManager.startPreview();
         mIsRecording = true;
+        mIsPaused = false;
+        mBackgroundHandler.post(new Runnable() {
+            @Override
+            public void run() {
+                notifyEncodingStarted(mCurrentParams);
+            }
+        });
     }
 
     @Override
@@ -97,6 +99,8 @@ public class NativeRecorderImpl extends AbsCamcorder implements Camera1ManagerIm
         //remove all pending encoding frames callbacks -> prevent stalling on server sde!!
         mBackgroundHandler.removeCallbacksAndMessages(null);
         mIsRecording = false;
+        mIsPaused = true;
+        notifyEncodingPaused();
     }
 
     @Override
@@ -105,28 +109,16 @@ public class NativeRecorderImpl extends AbsCamcorder implements Camera1ManagerIm
         mCameraManager.stopPreview();
         //remove all pending encoding frames callbacks -> prevent stalling on server sde!!
         mBackgroundHandler.removeCallbacksAndMessages(null);
+        mIsPaused = false;
         mIsRecording = false;
+        notifyEncodingStopped();
     }
-/*
-    @Override
-    public void switchToNextVideoQuality() {
-        boolean wasRecording = mIsRecording;
-        if (wasRecording){
-            mCameraManager.disableFrameCapture();
-            mCameraManager.stopPreview();
-        }
-        mCameraManager.switchToMajorSize();
-        mCameraManager.startPreview();
 
-        if (wasRecording) {
-            startRecording();
-        }
-    }
-*/
     @Override
     public void switchToVideoQuality(final Params params){
         mCameraManager.disableFrameCapture();
         mCameraManager.stopPreview();
+        //mBackgroundHandler.removeCallbacksAndMessages(null);
 
         final Size size = new Size(params.width(), params.height());
         try{
@@ -135,17 +127,26 @@ public class NativeRecorderImpl extends AbsCamcorder implements Camera1ManagerIm
         }
         catch(IllegalArgumentException e){
             Log.e("RECORDER", e.getMessage());
+            return;
         }
 
+        assert mBackgroundThread != null;
+        synchronized (mBackgroundThread){
+            try{
+                while (mBackgroundHandler == null){
+                    wait();
+                }
+            }catch(InterruptedException e){}
+        }
         mBackgroundHandler.post(new Runnable() {
             @Override
             public void run() {
                 mCurrentParams = params;
-                StreamSenderJNI.nativeApplyParams(
+                /*StreamSenderJNI.nativeApplyParams(
                         mCurrentParams.width(),
                         mCurrentParams.height(),
                         mCurrentParams.bitrate()
-                );
+                );*/
             }
         });
 
@@ -168,14 +169,18 @@ public class NativeRecorderImpl extends AbsCamcorder implements Camera1ManagerIm
         mBackgroundThread = new HandlerThread(TAG){
             @Override
             protected void onLooperPrepared() {
-                mBackgroundHandler = new Handler(Looper.myLooper());
-                mBackgroundHandler.post(new Runnable() {
-                    @Override
-                    public void run() {
-                        StreamSenderJNI.nativeInitEncoder();
-                        Log.d(TAG, "nativeInit");
-                    }
-                });
+                synchronized (mBackgroundThread){
+                    mBackgroundHandler = new Handler(Looper.myLooper());
+                    mBackgroundHandler.post(new Runnable() {
+                        @Override
+                        public void run() {
+                            StreamSenderJNI.nativeInitEncoder();
+                            if (VERBOSE) Log.d(TAG, "nativeInit");
+                        }
+                    });
+                    notifyAll();
+                }
+
             }
         };
         mBackgroundThread.start();
@@ -190,18 +195,14 @@ public class NativeRecorderImpl extends AbsCamcorder implements Camera1ManagerIm
             @Override
             public void run() {
                 StreamSenderJNI.nativeReleaseEncoder();
-                Log.d(TAG, "nativeRelease");
+                if (VERBOSE) Log.d(TAG, "nativeRelease");
                 Looper.myLooper().quit();
             }
         });
-        //mBackgroundThread.quitSafely();
         try{
             mBackgroundThread.join();
-            //Log.d(TAG, "Looper: "+mBackgroundThread.getLooper());
             if (VERBOSE) Log.d("REC", "HandlerThread quit");
-        }catch(InterruptedException e){
-            Log.d(TAG, e.toString());
-        }
+        }catch(InterruptedException e){ }
         mBackgroundHandler = null;
         mBackgroundThread = null;
     }

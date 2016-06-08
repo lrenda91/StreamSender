@@ -2,9 +2,7 @@ package it.polito.mad.streamsender.ui;
 
 import android.content.Context;
 import android.content.Intent;
-import android.net.TrafficStats;
 import android.os.PowerManager;
-import android.support.v4.app.Fragment;
 import android.support.v4.view.ViewPager;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
@@ -12,15 +10,11 @@ import android.support.v7.widget.Toolbar;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
-import android.widget.Toast;
 
-import java.net.Socket;
-import java.net.SocketException;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 
-import it.polito.mad.streamsender.NetworkMonitor2;
 import it.polito.mad.streamsender.R;
-import it.polito.mad.streamsender.Util;
-import it.polito.mad.streamsender.encoding.StreamSenderJNI;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -30,6 +24,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        registerExceptionHandler();
         setContentView(R.layout.activity_main);
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
@@ -52,13 +47,6 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onPause() {
-        /*try{
-            mNetMonitor.stop();
-        }
-        catch (SocketException e){
-            Log.e("ACT", e.getMessage());
-        }*/
-
         wakeLock.release();
         super.onPause();
     }
@@ -81,28 +69,29 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-/*
-    private NetworkMonitor2 mNetMonitor = new NetworkMonitor2(new NetworkMonitor2.Callback() {
-        @Override
-        public void onData(long txBytes, long rxBytes) {
-            Log.d("ACT", txBytes + " B TX");
-            //Log.d("ACT", rxBytes + " B RX");
+
+
+
+    public static void registerExceptionHandler(){
+        Thread.setDefaultUncaughtExceptionHandler(new ExceptionHandler());
+    }
+
+    private static class ExceptionHandler implements java.lang.Thread.UncaughtExceptionHandler {
+        private final String LINE_SEPARATOR = "\n";
+        public static final String LOG_TAG = ExceptionHandler.class.getSimpleName();
+
+        @SuppressWarnings("deprecation")
+        public void uncaughtException(Thread thread, Throwable exception) {
+            StringWriter stackTrace = new StringWriter();
+            exception.printStackTrace(new PrintWriter(stackTrace));
+
+            StringBuilder errorReport = new StringBuilder();
+            errorReport.append(stackTrace.toString());
+
+            Log.e(LOG_TAG, errorReport.toString());
+
+            android.os.Process.killProcess(android.os.Process.myPid());
+            System.exit(10);
         }
-        @Override
-        public void onDataRate(long txBps, long rxBps) {
-            double txKbps = ((double) txBps)  //bytes per second
-                    * 8.0                       //bits per second
-                    / 1000.0;                   //Kbits per second
-            double rxKbps = ((double) rxBps)  //bytes per second
-                    * 8.0                       //bits per second
-                    / 1000.0;                   //Kbits per second
-            Log.d("ACT", txKbps + " Kbps TX");
-            Log.d("ACT", rxKbps + " Kbps RX");
-        }
-        @Override
-        public void onUnsupportedTrafficStats() {
-            Log.d("ACT", "UNSUPPORTED");
-        }
-    });
-*/
+    }
 }

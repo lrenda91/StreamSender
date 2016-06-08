@@ -111,8 +111,6 @@ public class Camera1ManagerImpl implements Camera1Manager {
             }
         });
         if (VERBOSE) Util.logCameraSizes(TAG, mSuitableSizes);
-
-        //switchToSize(getCurrentSize());
     }
 
     @Override
@@ -145,6 +143,7 @@ public class Camera1ManagerImpl implements Camera1Manager {
 
     @Override
     public void switchToSize(Size newSize) throws IllegalArgumentException{
+        checkForCameraAcquisition(true);
         int idx = mSuitableSizes.indexOf(newSize);
         if (idx < 0){
             throw new IllegalArgumentException("Illegal size: "+Util.sizeToString(newSize));
@@ -172,7 +171,7 @@ public class Camera1ManagerImpl implements Camera1Manager {
             public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
                 try {
                     checkForCameraAcquisition(true);
-                    mCamera.stopPreview();
+                    /*mCamera.stopPreview();*/
                     switch (rotation) {
                         case Surface.ROTATION_0:
                             mCamera.setDisplayOrientation(90);

@@ -7,6 +7,11 @@
     <string name="pref_title_net_monitor">Enable network data monitor</string>
     <string name="pref_title_net_monitor_summary">Show sent and received bytes</string>
 
+    <string name="pref_key_adaptivity">adaptivity</string>
+    <string name="pref_title_adaptivity">Adapt video quality</string>
+    <string name="pref_title_adaptivity_summary">Automatically switch to best possible quality</string>
+
+
     <string name="pref_key_server_ip">address</string>
     <string name="pref_server_ip">Server IP address</string>
     <string name="pref_server_ip_default_value">192.168.1.10</string>

@@ -3,10 +3,10 @@ package it.polito.mad.streamsender.encoding;
 /**
  * Created by luigi on 27/04/16.
  */
-public abstract class SimpleEncodingCallback implements EncodingCallback {
+public abstract class SimpleEncodingListener implements EncodingListener {
 
     @Override
-    public void onStartedEncoding() { }
+    public void onEncodingStarted(Params params) { }
 
     @Override
     public void onConfigBytes(VideoChunks.Chunk chunk, int width, int height, int encodeBps, int frameRate) { }
@@ -15,6 +15,9 @@ public abstract class SimpleEncodingCallback implements EncodingCallback {
     public void onEncodedChunk(VideoChunks.Chunk chunk) { }
 
     @Override
-    public void onStoppedEncoding() { }
+    public void onEncodingPaused() { }
+
+    @Override
+    public void onEncodingStopped() { }
 
 }

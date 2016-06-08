@@ -1,16 +1,15 @@
 package it.polito.mad.streamsender.record;
 
 import android.content.Context;
+import android.os.Handler;
 import android.util.Log;
-import android.view.SurfaceView;
-import android.view.ViewGroup;
-
-import java.io.IOException;
+import android.util.Pair;
 
 import it.polito.mad.streamsender.Util;
 import it.polito.mad.streamsender.encoding.MediaCodecEncoderThread;
-import it.polito.mad.streamsender.encoding.EncodingCallback;
+import it.polito.mad.streamsender.encoding.EncodingListener;
 import it.polito.mad.streamsender.encoding.Params;
+import it.polito.mad.streamsender.encoding.VideoChunks;
 
 /**
  * Created by luigi on 24/02/16.
@@ -18,18 +17,38 @@ import it.polito.mad.streamsender.encoding.Params;
 @SuppressWarnings("deprecation")
 public class MediaCodecRecorderImpl extends AbsCamcorder implements Camera1ManagerImpl.Callback {
 
+    private static final String TAG = "MediaCodecEncoder";
+
     private Camera1Manager mCameraManager;
     private MediaCodecEncoderThread mEncoderThread;
 
     public MediaCodecRecorderImpl(Context context){
         super(context);
         mCameraManager = new Camera1ManagerImpl(context, this);
-        mEncoderThread = new MediaCodecEncoderThread(null);
-    }
+        mEncoderThread = new MediaCodecEncoderThread(new MediaCodecEncoderThread.Listener() {
 
-    @Override
-    public void setEncoderListener(EncodingCallback listener){
-        mEncoderThread.setListener(listener);
+            @Override
+            public void onCodecStarted(int width, int height, int bitRate, int frameRate) {
+                Params params = new Params.Builder()
+                        .width(width)
+                        .height(height)
+                        .bitRate(bitRate * 1000)
+                        .frameRate(frameRate)
+                        .build();
+                notifyEncodingStarted(params);
+            }
+
+            @Override
+            public void onCodecSpecificData(VideoChunks.Chunk chunk, int width, int height, int bitRate, int frameRate) {
+                notifyConfigBytesAvailable(chunk, width, height, bitRate, frameRate);
+            }
+
+            @Override
+            public void onCodecEncodedData(VideoChunks.Chunk chunk) {
+                notifyEncodedChunkAvailable(chunk);
+            }
+        });
+        //mEncoderThread.mEncodeListeners = this.mEncodeListeners;
     }
 
     @Override
@@ -56,6 +75,7 @@ public class MediaCodecRecorderImpl extends AbsCamcorder implements Camera1Manag
     @Override
     public void pauseRecording() {
         mCameraManager.disableFrameCapture();
+        notifyEncodingPaused();
     }
 
     @Override
@@ -66,6 +86,8 @@ public class MediaCodecRecorderImpl extends AbsCamcorder implements Camera1Manag
         mCameraManager.stopPreview();
 
         mEncoderThread.waitForTermination();
+
+        notifyEncodingStopped();
     }
 
     @Override
@@ -82,7 +104,7 @@ public class MediaCodecRecorderImpl extends AbsCamcorder implements Camera1Manag
             mCameraManager.switchToSize(size);
         }
         catch(IllegalArgumentException e){
-            Log.e("RECORDER", e.getMessage());
+            Log.e(TAG, e.getMessage());
         }
 
         mCameraManager.startPreview();

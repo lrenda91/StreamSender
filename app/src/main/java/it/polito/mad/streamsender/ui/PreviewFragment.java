@@ -6,6 +6,7 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
 import android.preference.PreferenceManager;
 import android.support.v4.app.Fragment;
 import android.support.v4.content.ContextCompat;
@@ -19,19 +20,14 @@ import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import java.net.Socket;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.ListIterator;
 import java.util.Set;
 import java.util.TreeSet;
 
 import it.polito.mad.streamsender.R;
 import it.polito.mad.streamsender.Util;
-import it.polito.mad.streamsender.encoding.EncodingCallback;
-import it.polito.mad.streamsender.encoding.SimpleEncodingCallback;
+import it.polito.mad.streamsender.encoding.EncodingListener;
+import it.polito.mad.streamsender.encoding.SimpleEncodingListener;
 import it.polito.mad.streamsender.record.AbsCamcorder;
 import it.polito.mad.streamsender.record.Size;
 import it.polito.mad.streamsender.encoding.VideoChunks;
@@ -49,6 +45,7 @@ public class PreviewFragment extends Fragment {
     //By default, camera permission is granted.
     //If current API is >= 23, it is denied until user explicitly grants it
     private boolean mCameraPermissionGranted = (Build.VERSION.SDK_INT < 23);
+    private boolean mAutoDetectQuality;
 
     private SurfaceView preview;
     private Button rec, pause, stop, connect;
@@ -65,8 +62,9 @@ public class PreviewFragment extends Fragment {
         @Override
         public void onConnectionEstablished(String uri) {
             rec.setEnabled(true);
-            pause.setEnabled(true);
-            stop.setEnabled(true);
+            pause.setEnabled(false);
+            stop.setEnabled(false);
+            connect.setEnabled(false);
             String device = Util.getCompleteDeviceName();
             String[] qualities = new String[mSizes.size()];
             for (int i=0;i< mSizes.size(); i++){
@@ -84,51 +82,43 @@ public class PreviewFragment extends Fragment {
         }
 
         @Override
-        public void onConnectionError(Exception e) {
+        public void onConnectionFailed(Exception e) {
             Toast.makeText(getContext(), "Can't connect to server: "
                     + e.getMessage(), Toast.LENGTH_LONG).show();
         }
 
         @Override
         public void onBandwidthChange(int Kbps, double performancesPercentage) {
-            Log.d(TAG, Kbps+" Kbps "+performancesPercentage+"%");
             try{
                 if (performancesPercentage > 95.0){
-                    mRecorder.switchToHigherQuality();
+                    if (!mRecorder.switchToHigherQuality()){
+                        Log.d(TAG, "GIA AL MASSIMO");
+                    }
                 }
                 else {
-                    mRecorder.switchToLowerQuality();
+                    if (!mRecorder.switchToLowerQuality()){
+                        Log.d(TAG, "GIA AL MINIMO");
+                    }
                 }
             }catch(Exception ex){
                 Log.w(TAG, ex.getMessage());
             }
-
-            /*Params targetParams = null;
-            ListIterator<Params> iterator = mRecorder.getPresets().listIterator();
-            while (iterator.hasPrevious()){
-                Params params = iterator.previous();
-                if (params.bitrate() <= Kbps){
-                    targetParams = params;
-                    break;
-                }
-            }Log.d(TAG, "SWITCH TO "+targetParams);
-            if (targetParams != null){
-
-                mRecorder.switchToVideoQuality(targetParams);
-            }*/
         }
 
         @Override
-        public void onConnectionClosed(boolean closedByServer) {
+        public void onConnectionLost(boolean closedByServer) {
             rec.setEnabled(false);
             pause.setEnabled(false);
             stop.setEnabled(false);
-            String message = closedByServer ? "closed by server" : "closed";
-            Log.d(TAG, message);
+            connect.setEnabled(true);
         }
 
         @Override
         public void onResetReceived(int w, int h, int kbps) {
+            if (mAutoDetectQuality){
+                Log.d(TAG, "Ignoring RESET from server: Auto detect quality enabled");
+                return;
+            }
             String format = String.format("RESET: %dx%d %d Kbps",w,h,kbps);
             Size size = new Size(w,h);
             int sizeIdx = mSizes.indexOf(size);
@@ -143,21 +133,6 @@ public class PreviewFragment extends Fragment {
         }
 
     };
-    private EncodingCallback mEncoderListener = new SimpleEncodingCallback() {
-        @Override
-        public void onConfigBytes(VideoChunks.Chunk chunk, int width, int height, int encodeBps, int frameRate) {
-            if (mClient.isOpen()) {
-                mClient.sendConfigBytes(chunk.data, width, height, encodeBps, frameRate);
-            }
-        }
-        @Override
-        public void onEncodedChunk(VideoChunks.Chunk chunk) {
-            if (mClient.isOpen()) {
-                mClient.sendStreamBytes(chunk);
-            }
-        }
-    };
-
 
     public PreviewFragment() { }
 
@@ -182,7 +157,6 @@ public class PreviewFragment extends Fragment {
         pause = (Button) view.findViewById(R.id.button_pause);
         stop = (Button) view.findViewById(R.id.button_stop);
         connect = (Button) view.findViewById(R.id.button_connect);
-        //switchQuality = (Button) view.findViewById(R.id.button_quality_switch);
         mResolutionSeekBar = (SeekBar) view.findViewById(R.id.resolution_seek_bar);
         mBitrateSeekBar = (SeekBar) view.findViewById(R.id.bitrate_seek_bar);
         mResolutionLabel = (TextView) view.findViewById(R.id.resolution_text_view);
@@ -206,13 +180,21 @@ public class PreviewFragment extends Fragment {
     public void onPause() {
         if (mCameraPermissionGranted) {
             mRecorder.stopRecording();
-            mRecorder.setEncoderListener(null);
+            mRecorder.clearEncodingListeners();
             mRecorder.closeCamera();
         }
+        /*if (mClient.isOpen()){
+            mClient.closeConnection();
+        }*/
+        super.onPause();
+    }
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
         if (mClient.isOpen()){
             mClient.closeConnection();
         }
-        super.onPause();
     }
 
     @Override
@@ -234,9 +216,46 @@ public class PreviewFragment extends Fragment {
     }
 
     private void setupCameraRecorder(){
+        mAutoDetectQuality = mPreferences.getBoolean(getString(R.string.pref_key_adaptivity), false);
+        mResolutionSeekBar.setEnabled(!mAutoDetectQuality);
+        mBitrateSeekBar.setEnabled(!mAutoDetectQuality);
+        mClient.setBandWidthMeasureEnabled(mAutoDetectQuality);
+
         mRecorder.openCamera();
         mRecorder.setSurfaceView(preview);
-        mRecorder.setEncoderListener(mEncoderListener);
+
+        mRecorder.registerEncodingListener(new SimpleEncodingListener() {
+            @Override
+            public void onEncodingStarted(Params params) {
+                rec.setEnabled(false);
+                pause.setEnabled(true);
+                stop.setEnabled(true);
+                Size size = params.getSize();
+                int sizeIdx = mSizes.indexOf(new Size(params.width(),params.height()));
+                int bitrateIdx = mBitRates.indexOf(params.bitrate());
+                if (bitrateIdx < 0 || sizeIdx < 0){
+                    Log.e(TAG, params.toString()+" is not available for this device");
+                    return;
+                }
+                mResolutionSeekBar.setProgress(sizeIdx);
+                mBitrateSeekBar.setProgress(bitrateIdx);
+                mBitrateLabel.setText(String.format("%d Kbps", params.bitrate()));
+                mResolutionLabel.setText(Util.sizeToString(size));
+            }
+            @Override
+            public void onEncodingPaused() {
+                rec.setEnabled(true);
+                pause.setEnabled(false);
+                stop.setEnabled(true);
+            }
+            @Override
+            public void onEncodingStopped() {
+                rec.setEnabled(true);
+                pause.setEnabled(false);
+                stop.setEnabled(false);
+            }
+        }, new Handler());
+        mRecorder.registerEncodingListener(mClient, null);
 
         Set<Size> sizesSet= new TreeSet<>();
         Set<Integer> bitRatesSet = new TreeSet<>();

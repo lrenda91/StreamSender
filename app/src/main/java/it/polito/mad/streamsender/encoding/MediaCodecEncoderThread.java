@@ -21,21 +21,29 @@ public class MediaCodecEncoderThread implements Runnable {
     private static final String TAG = "ENCODER";
     private static final boolean VERBOSE = false;
 
+    public interface Listener {
+        void onCodecStarted(int width, int height, int bitRate, int frameRate);
+        void onCodecSpecificData(VideoChunks.Chunk chunk, int width, int height, int bitRate, int frameRate);
+        void onCodecEncodedData(VideoChunks.Chunk chunk);
+    }
+
     //private static final int TIMEOUT_US = -1;
     private static final String MIME_TYPE = "video/avc";
-    private static final int FRAME_RATE = 20;
+    private static final int FRAME_RATE = 25;
     private static final int I_FRAME_INTERVAL = 1;
     private static final int BIT_RATE_BPS = 500000;
 
     private Thread mWorkerThread;
-    private EncodingCallback mListener;
+    private Listener mListener;
     private VideoChunks mRawFrames = new VideoChunks();
     private int mWidth, mHeight;
 
-    public EncodingCallback getListener(){
+    //public Set<Pair<Handler,EncodingListener>> mEncodeListeners = new HashSet<>();
+
+    /*public EncodingListener getListener(){
         return mListener;
-    }
-    public MediaCodecEncoderThread(EncodingCallback listener){
+    }*/
+    public MediaCodecEncoderThread(Listener listener){
         mListener = listener;
     }
 
@@ -75,9 +83,10 @@ public class MediaCodecEncoderThread implements Runnable {
         return mWorkerThread != null;
     }
 
-    public void setListener(EncodingCallback mListener) {
+    /*
+    public void setListener(EncodingListener mListener) {
         this.mListener = mListener;
-    }
+    }*/
 
     public void submitAccessUnit(byte[] data){
         mRawFrames.addChunk(data, 0, 0);
@@ -118,7 +127,7 @@ public class MediaCodecEncoderThread implements Runnable {
         }
 
         if (mListener != null){
-            mListener.onStartedEncoding();
+            mListener.onCodecStarted(mWidth, mHeight, BIT_RATE_BPS, FRAME_RATE);
         }
 
         ByteBuffer[] encoderInputBuffers = encoder.getInputBuffers();
@@ -193,17 +202,19 @@ public class MediaCodecEncoderThread implements Runnable {
                 //publish result to the caller
                 byte[] encodedArray = new byte[encodedData.remaining()]; //converting bytebuffer to byte array
                 encodedData.get(encodedArray);
-                VideoChunks.Chunk chunk =
+                final VideoChunks.Chunk chunk =
                         new VideoChunks.Chunk(encodedArray, info.flags, info.presentationTimeUs);
 
                 boolean isConfigData = ((chunk.flags & MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0);
                 if (isConfigData && mListener != null) {
-                    String s = "[ "; for (byte b : encodedArray) s+=""+b+" "; s+="]";
-                    Log.d(TAG, "config data: "+s);
-                    mListener.onConfigBytes(chunk, mWidth, mHeight, BIT_RATE_BPS, FRAME_RATE);
+                    if (VERBOSE){
+                        String s = "[ "; for (byte b : encodedArray) s+=""+b+" "; s+="]";
+                        Log.d(TAG, "config data: "+s);
+                    }
+                    mListener.onCodecSpecificData(chunk, mWidth, mHeight, BIT_RATE_BPS, FRAME_RATE);
                 }
                 else if (mListener != null){
-                     mListener.onEncodedChunk(chunk);
+                    mListener.onCodecEncodedData(chunk);
                 }
 
                 if (VERBOSE)
@@ -221,9 +232,6 @@ public class MediaCodecEncoderThread implements Runnable {
         encoder.stop();
         encoder.release();
         Log.i(TAG, "Encoder Released!! Closing.");
-        if (mListener != null) {
-            mListener.onStoppedEncoding();
-        }
     }
 
 

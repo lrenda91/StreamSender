@@ -1,9 +1,7 @@
 package it.polito.mad.streamsender.record;
 
-import android.util.Size;
 import android.view.SurfaceView;
 
-import it.polito.mad.streamsender.encoding.EncodingCallback;
 import it.polito.mad.streamsender.encoding.Params;
 
 /**
