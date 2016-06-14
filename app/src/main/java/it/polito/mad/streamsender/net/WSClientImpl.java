@@ -125,6 +125,8 @@ public class WSClientImpl extends WebSocketAdapter implements WSClient, Encoding
             JSONObject configMsg = JSONMessageFactory.createHelloMessage(device, qualities, actualSizeIdx,
                     bitrates, actualBitrateIdx);
             mWebSocket.sendText(configMsg.toString());
+            totalBytesToSend.addAndGet(configMsg.toString().length());
+            contToSend.incrementAndGet();
         } catch (JSONException e) {
             Log.e(TAG, e.getMessage());
         }
@@ -134,18 +136,26 @@ public class WSClientImpl extends WebSocketAdapter implements WSClient, Encoding
         try {
             JSONObject configMsg = JSONMessageFactory.createConfigMessage(configData, width, height, encodeBps, frameRate);
             mWebSocket.sendText(configMsg.toString());
+            totalBytesToSend.addAndGet(configMsg.toString().length());
+            contToSend.incrementAndGet();
+            cont = 1;
 
         } catch (JSONException e) {
             Log.e(TAG, e.getMessage());
         }
     }
 
+    private long cont = 1L;
+
     public void sendStreamBytes(final VideoChunks.Chunk chunk){
         try {
             JSONObject obj = JSONMessageFactory.createStreamMessage(chunk);
+            obj.put("num",(cont++));
+            //Log.d(TAG, "seq# -> "+cont);
             String text = obj.toString();
             totalBytesToSend.addAndGet(text.length());
             contToSend.incrementAndGet();
+            //try{Thread.sleep(10);}catch (InterruptedException e){}
             mWebSocket.sendText(text);
         }
         catch(JSONException e){
@@ -216,7 +226,7 @@ public class WSClientImpl extends WebSocketAdapter implements WSClient, Encoding
     public void onFrameSent(WebSocket websocket, final WebSocketFrame frame) throws Exception {
         super.onFrameSent(websocket, frame);
         if (frame.isDataFrame()) {
-            //try{Thread.sleep(50);}catch (InterruptedException e){}
+            //try{Thread.sleep(10);}catch (InterruptedException e){}
             if (contSent.get() == 0){
                 mMeasureThread.start();
             }
@@ -274,7 +284,7 @@ public class WSClientImpl extends WebSocketAdapter implements WSClient, Encoding
 
                 double toSendValue = (double) totalBytesToSend.get();
                 double sentValue = (double) totalSentBytes.get();
-                //Log.d(TAG, "SENT: "+contSent.get()+" TO SEND: "+contToSend.get());
+                Log.d(TAG, "SENT: "+contSent.get()+" TO SEND: "+contToSend.get());
                 if (toSendValue > 0){
                     double ratio = sentValue / toSendValue * 100.0;
                     double percentage = Math.round(ratio * 100.0) / 100.0;
@@ -294,6 +304,8 @@ public class WSClientImpl extends WebSocketAdapter implements WSClient, Encoding
                         });
                     }
                 }
+                totalBytesToSend.set(0);
+                totalSentBytes.set(0);
             }
             if (VERBOSE) Log.d(TAG, "STOP BW MEASURE");
         }

@@ -61,6 +61,8 @@ public class PreviewFragment extends Fragment {
     private WSClientImpl.Listener mWebSocketListener = new WSClientImpl.Listener() {
         @Override
         public void onConnectionEstablished(String uri) {
+            mRecorder.registerEncodingListener(mClient, null);
+
             rec.setEnabled(true);
             pause.setEnabled(false);
             stop.setEnabled(false);
@@ -89,15 +91,16 @@ public class PreviewFragment extends Fragment {
 
         @Override
         public void onBandwidthChange(int Kbps, double performancesPercentage) {
+            Log.d(TAG, "BANDWIDTH UTILIZATION: "+performancesPercentage+" %");
             try{
-                if (performancesPercentage > 95.0){
-                    if (!mRecorder.switchToHigherQuality()){
-                        Log.d(TAG, "GIA AL MASSIMO");
+                if (performancesPercentage == 100.0){
+                    if (mRecorder.switchToHigherQuality()){
+                        Log.d(TAG, "Switched to: "+mRecorder.getCurrentParams());
                     }
                 }
                 else {
-                    if (!mRecorder.switchToLowerQuality()){
-                        Log.d(TAG, "GIA AL MINIMO");
+                    if (mRecorder.switchToLowerQuality()){
+                        Log.d(TAG, "Switched to: "+mRecorder.getCurrentParams());
                     }
                 }
             }catch(Exception ex){
@@ -107,6 +110,8 @@ public class PreviewFragment extends Fragment {
 
         @Override
         public void onConnectionLost(boolean closedByServer) {
+            mRecorder.unregisterEncodingListener(mClient);
+
             rec.setEnabled(false);
             pause.setEnabled(false);
             stop.setEnabled(false);
@@ -255,7 +260,7 @@ public class PreviewFragment extends Fragment {
                 stop.setEnabled(false);
             }
         }, new Handler());
-        mRecorder.registerEncodingListener(mClient, null);
+        //mRecorder.registerEncodingListener(mClient, null);
 
         Set<Size> sizesSet= new TreeSet<>();
         Set<Integer> bitRatesSet = new TreeSet<>();

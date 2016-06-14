@@ -1,6 +1,7 @@
 package it.polito.mad.streamsender.record;
 
 import android.content.Context;
+import android.media.MediaCodec;
 import android.os.Handler;
 import android.support.v4.util.Pair;
 import android.view.SurfaceView;
@@ -8,6 +9,7 @@ import android.view.ViewGroup;
 
 import java.io.IOException;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
@@ -21,7 +23,9 @@ import it.polito.mad.streamsender.encoding.VideoChunks;
  */
 public abstract class AbsCamcorder implements Camcorder {
 
-    protected static final Size sRatio = new Size(3,4);
+    protected static final Size sRatio = new Size(4,3);
+    protected static final int FLAG_CODEC_SPECIFIC_DATA = MediaCodec.BUFFER_FLAG_CODEC_CONFIG;
+    protected static final int FLAG_MEDIA_DATA = 0;
 
     protected Context mContext;
     protected Camera1Manager mCameraManager;
@@ -83,11 +87,6 @@ public abstract class AbsCamcorder implements Camcorder {
         mCameraManager.acquireCamera();
         //now, we have available sizes -> keep suitable presets
         List<Size> sizes = mCameraManager.getSuitableSizes();
-        /*for (Params params : Params.PRESETS){
-            if (sizes.contains(new Size(params.width(), params.height()))){
-                mPresets.add(params);
-            }
-        }*/
         for (Size s : sizes){
             for (Params bestPreset : Params.getNearestPresets(s)){
                 mPresets.add(new Params.Builder()
@@ -107,6 +106,12 @@ public abstract class AbsCamcorder implements Camcorder {
 
     @Override
     public void setSurfaceView(final SurfaceView surfaceView) {
+        try {
+            mCameraManager.setPreviewSurface(surfaceView.getHolder());
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        /*
         surfaceView.post(new Runnable() {
             @Override
             public void run() {
@@ -114,13 +119,9 @@ public abstract class AbsCamcorder implements Camcorder {
                 ViewGroup.LayoutParams lp = surfaceView.getLayoutParams();
                 lp.width = measuredHeight * sRatio.getWidth() / sRatio.getHeight();
                 surfaceView.setLayoutParams(lp);
-                try {
-                    mCameraManager.setPreviewSurface(surfaceView.getHolder());
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
+
             }
-        });
+        });*/
     }
 
     public boolean registerEncodingListener(EncodingListener listener, Handler handler){
@@ -128,6 +129,21 @@ public abstract class AbsCamcorder implements Camcorder {
             return false;
         }
         return mEncodeListeners.add(new Pair<>(handler,listener));
+    }
+
+    public boolean unregisterEncodingListener(EncodingListener listener){
+        if (listener == null){
+            return false;
+        }
+        Iterator<Pair<Handler, EncodingListener>> iterator = mEncodeListeners.iterator();
+        while (iterator.hasNext()){
+            Pair<Handler, EncodingListener> pair = iterator.next();
+            if (pair.second == listener){
+                iterator.remove();
+                return true;
+            }
+        }
+        return false;
     }
 
     public void clearEncodingListeners(){

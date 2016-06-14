@@ -32,7 +32,7 @@ public class MediaCodecRecorderImpl extends AbsCamcorder implements Camera1Manag
                 Params params = new Params.Builder()
                         .width(width)
                         .height(height)
-                        .bitRate(bitRate * 1000)
+                        .bitRate(bitRate)
                         .frameRate(frameRate)
                         .build();
                 notifyEncodingStarted(params);

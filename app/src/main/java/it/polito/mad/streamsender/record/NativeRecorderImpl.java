@@ -16,7 +16,7 @@ import it.polito.mad.streamsender.encoding.*;
 public class NativeRecorderImpl extends AbsCamcorder implements Camera1ManagerImpl.Callback {
 
     private static final String TAG = "x264EncodingThread";
-    private static final boolean VERBOSE = true;
+    private static final boolean VERBOSE = false;
 
     private boolean mIsRecording = false, mIsPaused = false;
 
@@ -47,8 +47,9 @@ public class NativeRecorderImpl extends AbsCamcorder implements Camera1ManagerIm
                 if (res == null){
                     return;
                 }
-                final VideoChunks.Chunk chunk = new VideoChunks.Chunk(res, 0, System.currentTimeMillis());
-
+                final VideoChunks.Chunk chunk = new VideoChunks.Chunk(res,
+                        FLAG_MEDIA_DATA,
+                        System.currentTimeMillis());
                 notifyEncodedChunkAvailable(chunk);
             }
         });
@@ -68,16 +69,18 @@ public class NativeRecorderImpl extends AbsCamcorder implements Camera1ManagerIm
                             mCurrentParams.height(),
                             mCurrentParams.bitrate()
                     );
-
                     byte[][] headers = StreamSenderJNI.nativeGetHeaders();
                     byte[] sps = headers[0], pps = headers[1];
                     byte[] merged = new byte[sps.length + pps.length];
                     System.arraycopy(sps, 0, merged, 0, sps.length);
                     System.arraycopy(pps, 0, merged, sps.length, pps.length);
-                    final VideoChunks.Chunk chunk = new VideoChunks.Chunk(merged, 2, 0);
+                    final VideoChunks.Chunk chunk = new VideoChunks.Chunk(merged,
+                            FLAG_CODEC_SPECIFIC_DATA,
+                            0);
                     notifyConfigBytesAvailable(chunk,
                             mCurrentParams.width(), mCurrentParams.height(),
-                            mCurrentParams.bitrate() * 1000, mCurrentParams.frameRate());
+                            mCurrentParams.bitrate(), mCurrentParams.frameRate());
+                    if (VERBOSE) Log.d(TAG, "Config frame produced");
                 }
             });
         }
@@ -89,6 +92,7 @@ public class NativeRecorderImpl extends AbsCamcorder implements Camera1ManagerIm
             @Override
             public void run() {
                 notifyEncodingStarted(mCurrentParams);
+                if (VERBOSE) Log.d(TAG, "Started");
             }
         });
     }
@@ -101,6 +105,7 @@ public class NativeRecorderImpl extends AbsCamcorder implements Camera1ManagerIm
         mIsRecording = false;
         mIsPaused = true;
         notifyEncodingPaused();
+        if (VERBOSE) Log.d(TAG, "Paused");
     }
 
     @Override
@@ -112,13 +117,13 @@ public class NativeRecorderImpl extends AbsCamcorder implements Camera1ManagerIm
         mIsPaused = false;
         mIsRecording = false;
         notifyEncodingStopped();
+        if (VERBOSE) Log.d(TAG, "Stopped");
     }
 
     @Override
     public void switchToVideoQuality(final Params params){
         mCameraManager.disableFrameCapture();
         mCameraManager.stopPreview();
-        //mBackgroundHandler.removeCallbacksAndMessages(null);
 
         final Size size = new Size(params.width(), params.height());
         try{
@@ -138,19 +143,17 @@ public class NativeRecorderImpl extends AbsCamcorder implements Camera1ManagerIm
                 }
             }catch(InterruptedException e){}
         }
+        mBackgroundHandler.removeCallbacksAndMessages(null);
+
         mBackgroundHandler.post(new Runnable() {
             @Override
             public void run() {
                 mCurrentParams = params;
-                /*StreamSenderJNI.nativeApplyParams(
-                        mCurrentParams.width(),
-                        mCurrentParams.height(),
-                        mCurrentParams.bitrate()
-                );*/
             }
         });
 
         if (mIsRecording){
+
             startRecording();
         }
     }
@@ -201,7 +204,7 @@ public class NativeRecorderImpl extends AbsCamcorder implements Camera1ManagerIm
         });
         try{
             mBackgroundThread.join();
-            if (VERBOSE) Log.d("REC", "HandlerThread quit");
+            if (VERBOSE) Log.d(TAG, "HandlerThread quit");
         }catch(InterruptedException e){ }
         mBackgroundHandler = null;
         mBackgroundThread = null;

@@ -172,18 +172,19 @@ public class Camera1ManagerImpl implements Camera1Manager {
                 try {
                     checkForCameraAcquisition(true);
                     /*mCamera.stopPreview();*/
-                    switch (rotation) {
-                        case Surface.ROTATION_0:
-                            mCamera.setDisplayOrientation(90);
-                            break;
-                        case Surface.ROTATION_270:
-                            mCamera.setDisplayOrientation(180);
-                            break;
-                        case Surface.ROTATION_90:
-                        case Surface.ROTATION_180:
-                            break;
-                    }
+//                    switch (rotation) {
+//                        case Surface.ROTATION_0:
+//                            mCamera.setDisplayOrientation(90);
+//                            break;
+//                        case Surface.ROTATION_270:
+//                            mCamera.setDisplayOrientation(180);
+//                            break;
+//                        case Surface.ROTATION_90:
+//                        case Surface.ROTATION_180:
+//                            break;
+//                    }
                     mCamera.setPreviewDisplay(holder);
+                    mCamera.setDisplayOrientation(90);
                     mCamera.startPreview();
 
                 } catch (IOException e) {
