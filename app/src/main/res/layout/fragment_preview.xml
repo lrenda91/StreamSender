@@ -67,7 +67,7 @@
         android:layout_below="@id/main_controls"
         android:layout_height="wrap_content">
 
-        <LinearLayout
+        <!--<LinearLayout
             android:orientation="horizontal"
             android:weightSum="4"
             android:layout_marginBottom="5dp"
@@ -86,23 +86,25 @@
                 android:layout_weight="3"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content" />
-        </LinearLayout>
+        </LinearLayout>-->
 
         <LinearLayout
             android:orientation="horizontal"
             android:weightSum="4"
-            android:layout_marginBottom="5dp"
+            android:layout_marginTop="10dp"
+            android:layout_marginBottom="10dp"
             android:layout_width="match_parent"
             android:layout_height="wrap_content">
             <TextView
-                android:id="@+id/bitrate_text_view"
+                android:id="@+id/presets_text_view"
                 android:gravity="center"
-                android:text="bitrate"
+                android:lines="2"
+                android:maxLines="2"
                 android:layout_weight="1"
                 android:layout_width="0dp"
                 android:layout_height="match_parent" />
             <SeekBar
-                android:id="@+id/bitrate_seek_bar"
+                android:id="@+id/presets_seek_bar"
                 android:progress="1"
                 android:layout_weight="3"
                 android:layout_width="0dp"

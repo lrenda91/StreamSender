@@ -5,7 +5,6 @@ import android.media.MediaCodec;
 import android.os.Handler;
 import android.support.v4.util.Pair;
 import android.view.SurfaceView;
-import android.view.ViewGroup;
 
 import java.io.IOException;
 import java.util.HashSet;
@@ -165,21 +164,43 @@ public abstract class AbsCamcorder implements Camcorder {
         }
     }
 
-    protected void notifyConfigBytesAvailable(final VideoChunks.Chunk chunk,
-                                              final int width,
-                                              final int height,
-                                              final int encodeBps,
-                                              final int frameRate){
+    protected void notifyParamsChanged(final Params params){
         for (final Pair<Handler,EncodingListener> listener : mEncodeListeners){
             if (listener.first != null) {
                 listener.first.post(new Runnable() {
                     @Override
                     public void run() {
-                        listener.second.onConfigBytes(chunk, width, height, encodeBps, frameRate);
+                        listener.second.onParamsChanged(params);
                     }
                 });
             } else {
-                listener.second.onConfigBytes(chunk, width, height, encodeBps, frameRate);
+                listener.second.onParamsChanged(params);
+            }
+        }
+    }
+
+    protected void notifyConfigHeaders(final VideoChunks.Chunk chunk,
+                                       final Params params){
+        for (final Pair<Handler,EncodingListener> listener : mEncodeListeners){
+            /*if (listener.first != null) {
+                listener.first.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        listener.second.onConfigHeaders(chunk, width, height, encodeBps, frameRate);
+                    }
+                });
+            } else {
+                listener.second.onConfigHeaders(chunk, width, height, encodeBps, frameRate);
+            }*/
+            if (listener.first != null) {
+                listener.first.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        listener.second.onConfigHeaders(chunk, params);
+                    }
+                });
+            } else {
+                listener.second.onConfigHeaders(chunk, params);
             }
         }
     }

@@ -1,13 +1,10 @@
 package it.polito.mad.streamsender.record;
 
 import android.content.Context;
-import android.os.Handler;
 import android.util.Log;
-import android.util.Pair;
 
 import it.polito.mad.streamsender.Util;
 import it.polito.mad.streamsender.encoding.MediaCodecEncoderThread;
-import it.polito.mad.streamsender.encoding.EncodingListener;
 import it.polito.mad.streamsender.encoding.Params;
 import it.polito.mad.streamsender.encoding.VideoChunks;
 
@@ -40,7 +37,13 @@ public class MediaCodecRecorderImpl extends AbsCamcorder implements Camera1Manag
 
             @Override
             public void onCodecSpecificData(VideoChunks.Chunk chunk, int width, int height, int bitRate, int frameRate) {
-                notifyConfigBytesAvailable(chunk, width, height, bitRate, frameRate);
+                Params params = new Params.Builder()
+                        .width(width)
+                        .height(height)
+                        .bitRate(bitRate)
+                        .frameRate(frameRate)
+                        .build();
+                notifyConfigHeaders(chunk, params);
             }
 
             @Override
@@ -48,7 +51,6 @@ public class MediaCodecRecorderImpl extends AbsCamcorder implements Camera1Manag
                 notifyEncodedChunkAvailable(chunk);
             }
         });
-        //mEncoderThread.mEncodeListeners = this.mEncodeListeners;
     }
 
     @Override

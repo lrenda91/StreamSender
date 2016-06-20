@@ -5,7 +5,6 @@ import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
 import android.util.Log;
-import android.util.Pair;
 
 import it.polito.mad.streamsender.encoding.*;
 
@@ -64,26 +63,27 @@ public class NativeRecorderImpl extends AbsCamcorder implements Camera1ManagerIm
             mBackgroundHandler.post(new Runnable() {
                 @Override
                 public void run() {
-                    StreamSenderJNI.nativeApplyParams(
+                    /*StreamSenderJNI.nativeApplyParams(
                             mCurrentParams.width(),
                             mCurrentParams.height(),
                             mCurrentParams.bitrate()
-                    );
+                    );*/
                     byte[][] headers = StreamSenderJNI.nativeGetHeaders();
                     byte[] sps = headers[0], pps = headers[1];
                     byte[] merged = new byte[sps.length + pps.length];
                     System.arraycopy(sps, 0, merged, 0, sps.length);
                     System.arraycopy(pps, 0, merged, sps.length, pps.length);
-                    final VideoChunks.Chunk chunk = new VideoChunks.Chunk(merged,
+                    final VideoChunks.Chunk chunk = new VideoChunks.Chunk(
+                            merged,
                             FLAG_CODEC_SPECIFIC_DATA,
                             0);
-                    notifyConfigBytesAvailable(chunk,
-                            mCurrentParams.width(), mCurrentParams.height(),
-                            mCurrentParams.bitrate(), mCurrentParams.frameRate());
+                    notifyConfigHeaders(chunk, mCurrentParams);
                     if (VERBOSE) Log.d(TAG, "Config frame produced");
                 }
             });
         }
+
+
         mCameraManager.enableFrameCapture();
         mCameraManager.startPreview();
         mIsRecording = true;
@@ -131,7 +131,7 @@ public class NativeRecorderImpl extends AbsCamcorder implements Camera1ManagerIm
             mCameraManager.startPreview();
         }
         catch(IllegalArgumentException e){
-            Log.e("RECORDER", e.getMessage());
+            Log.e(TAG, e.getMessage());
             return;
         }
 
@@ -149,6 +149,13 @@ public class NativeRecorderImpl extends AbsCamcorder implements Camera1ManagerIm
             @Override
             public void run() {
                 mCurrentParams = params;
+
+                StreamSenderJNI.nativeApplyParams(
+                        mCurrentParams.width(),
+                        mCurrentParams.height(),
+                        mCurrentParams.bitrate()
+                );
+                notifyParamsChanged(mCurrentParams);
             }
         });
 

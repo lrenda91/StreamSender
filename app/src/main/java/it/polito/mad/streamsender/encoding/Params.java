@@ -18,8 +18,8 @@ public class Params {
             new Params(768, 576, 1536, 25),     //576pHQ
             new Params(960, 720, 1856, 25),     //720p
             new Params(960, 720, 2432, 25),     //720pHQ
-            new Params(1440, 1080, 3712, 25),   //1080p
-            new Params(1440, 1080, 5632, 25),   //1080pHQ
+            //new Params(1440, 1080, 3712, 25),   //1080p
+            //new Params(1440, 1080, 5632, 25),   //1080pHQ
     };
 
     public static List<Params> getNearestPresets(Size size){   //il più grande tra i più piccoli

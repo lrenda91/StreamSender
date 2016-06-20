@@ -4,6 +4,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
 
+import it.polito.mad.streamsender.Util;
 import it.polito.mad.streamsender.encoding.EncodingListener;
 import it.polito.mad.streamsender.encoding.Params;
 import it.polito.mad.streamsender.net.ws.*;
@@ -11,12 +12,15 @@ import it.polito.mad.streamsender.net.ws.*;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
 import it.polito.mad.streamsender.encoding.VideoChunks;
+import it.polito.mad.streamsender.record.Size;
 
 /**
  * Manages a {@link WebSocket} inside a background thread
@@ -56,9 +60,14 @@ public class WSClientImpl extends WebSocketAdapter implements WSClient, Encoding
     }
 
     @Override
-    public void onConfigBytes(VideoChunks.Chunk chunk, int width, int height, int encodeBps, int frameRate) {
+    public void onParamsChanged(Params actualParams) {
+
+    }
+
+    @Override
+    public void onConfigHeaders(VideoChunks.Chunk chunk, Params params) {
         if (isOpen()) {
-            sendConfigBytes(chunk.data, width, height, encodeBps, frameRate);
+            sendConfigBytes(chunk.data, params.width(), params.height(), params.bitrate(), params.frameRate());
         }
     }
 
@@ -119,11 +128,35 @@ public class WSClientImpl extends WebSocketAdapter implements WSClient, Encoding
         mWebSocket.sendClose();
     }
 
-    public void sendHelloMessage(String device, String[] qualities, int actualSizeIdx,
-        int[] bitrates, int actualBitrateIdx){
+    public void sendHelloMessage(//String device,
+                                 String[] qualities, int actualSizeIdx,
+                                 int[] bitrates, int actualBitrateIdx){
         try {
+            String device = Util.getCompleteDeviceName();
             JSONObject configMsg = JSONMessageFactory.createHelloMessage(device, qualities, actualSizeIdx,
                     bitrates, actualBitrateIdx);
+            mWebSocket.sendText(configMsg.toString());
+            totalBytesToSend.addAndGet(configMsg.toString().length());
+            contToSend.incrementAndGet();
+        } catch (JSONException e) {
+            Log.e(TAG, e.getMessage());
+        }
+    }
+
+    private static String getFormattedParams(Params params){
+        return String.format("%dx%d %d", params.width(), params.height(), params.bitrate());
+    }
+
+    public void sendHelloMessage2(List<Params> params, int currentIdx){
+        try {
+            String device = Util.getCompleteDeviceName();
+            List<String> qualities = new ArrayList<>(params.size());
+            for (Params p : params){
+                qualities.add(getFormattedParams(p));
+            }
+            /*JSONObject configMsg = JSONMessageFactory.createHelloMessage(device, qualities, actualSizeIdx,
+                    bitrates, actualBitrateIdx);*/
+            JSONObject configMsg = JSONMessageFactory.createHelloMessage2(device, qualities, currentIdx);
             mWebSocket.sendText(configMsg.toString());
             totalBytesToSend.addAndGet(configMsg.toString().length());
             contToSend.incrementAndGet();

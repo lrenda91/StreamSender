@@ -9,7 +9,10 @@ public abstract class SimpleEncodingListener implements EncodingListener {
     public void onEncodingStarted(Params params) { }
 
     @Override
-    public void onConfigBytes(VideoChunks.Chunk chunk, int width, int height, int encodeBps, int frameRate) { }
+    public void onParamsChanged(Params actualParams) {}
+
+    @Override
+    public void onConfigHeaders(VideoChunks.Chunk chunk, Params params) { }
 
     @Override
     public void onEncodedChunk(VideoChunks.Chunk chunk) { }

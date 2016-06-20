@@ -6,6 +6,8 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.util.List;
+
 import it.polito.mad.streamsender.encoding.VideoChunks;
 
 /**
@@ -56,6 +58,26 @@ public class JSONMessageFactory {
         }
         msg.put(BITRATES_KEY, bitRatesArray);
         msg.put(CURRENT_BITRATE_KEY, bitRates[actualBitrateIdx]);
+        return msg;
+    }
+
+    public static JSONObject createHelloMessage2(String device, List<String> qualities,
+                                                int actualQualityIdx) throws JSONException {
+        JSONObject msg = get();
+        msg.put(TYPE_KEY, "hello");
+        msg.put(DEVICE_KEY, device);
+        JSONArray sizesArray = new JSONArray(qualities);
+        /*for (String s : qualities) {
+            sizesArray.put(s);
+        }*/
+        msg.put(QUALITIES_KEY, sizesArray);
+        msg.put(CURRENT_QUALITY_KEY, actualQualityIdx);
+        /*JSONArray bitRatesArray = new JSONArray();
+        for (int br : bitRates) {
+            bitRatesArray.put(br);
+        }
+        msg.put(BITRATES_KEY, bitRatesArray);
+        msg.put(CURRENT_BITRATE_KEY, bitRates[actualBitrateIdx]);*/
         return msg;
     }
 
