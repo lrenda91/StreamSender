@@ -1,5 +1,6 @@
 package it.polito.mad.streamsender.record;
 
+import android.app.Activity;
 import android.content.Context;
 import android.graphics.ImageFormat;
 import android.hardware.Camera;
@@ -74,24 +75,52 @@ public class Camera1ManagerImpl implements Camera1Manager {
         if (VERBOSE) Log.d(TAG, "Camera acquired");
 
         Camera.Parameters parameters = mCamera.getParameters();
-        parameters.setPreviewFrameRate(25);
-        int chosen = -1;
-        for (int format : parameters.getSupportedPreviewFormats()){
-            try{
-                parameters.setPreviewFormat(format);
-                mCamera.setParameters(parameters);
-                chosen = format;
+        List<Integer> supportedPreviewFrameRates = parameters.getSupportedPreviewFrameRates();
+        int chosenFrameRate = 0;
+        for (Integer fr : supportedPreviewFrameRates)
+            if (fr > chosenFrameRate) chosenFrameRate = fr;
+
+        parameters.setPreviewFrameRate(chosenFrameRate);
+
+        Camera.CameraInfo info =
+                new Camera.CameraInfo();
+        Camera.getCameraInfo(1, info);
+        int rotation = ((Activity) mContext).getWindowManager().getDefaultDisplay()
+                .getRotation();
+        int degrees = 0;
+        switch (rotation) {
+            case Surface.ROTATION_0:
+                degrees = 0;
                 break;
-            }
-            catch(Throwable t){
-                Log.e(TAG, "Error setting ImageFormat "+format);
-                continue;
-            }
+            case Surface.ROTATION_90:
+                degrees = 90;
+                break;
+            case Surface.ROTATION_180:
+                degrees = 180;
+                break;
+            case Surface.ROTATION_270:
+                degrees = 270;
+                break;
         }
-        if (chosen < 0){
-            throw new RuntimeException("Can't find suitable ImageFormat");
+
+        int result;
+        if (info.facing == Camera.CameraInfo.CAMERA_FACING_FRONT) {
+            result = (info.orientation + degrees) % 360;
+            result = (360 - result) % 360;  // compensate the mirror
+        } else {  // back-facing
+            result = (info.orientation - degrees + 360) % 360;
         }
-        mImageFormat = chosen;
+        mCamera.setDisplayOrientation(result);
+
+        //YV12
+        if(parameters.getSupportedPreviewFormats().contains(ImageFormat.YV12))
+            mImageFormat = ImageFormat.YV12;
+
+        else
+            mImageFormat = ImageFormat.NV21;
+
+        parameters.setPreviewFormat(mImageFormat);
+        mCamera.setParameters(parameters);
         if (VERBOSE) Util.logCameraPictureFormat(TAG, mImageFormat);
 
         mSuitableSizes = new LinkedList<>();
