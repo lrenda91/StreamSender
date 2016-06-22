@@ -6,6 +6,11 @@ import android.os.HandlerThread;
 import android.os.Looper;
 import android.util.Log;
 
+import java.io.IOException;
+import java.io.UnsupportedEncodingException;
+import java.util.Arrays;
+
+import it.polito.mad.streamsender.Util;
 import it.polito.mad.streamsender.encoding.*;
 
 /**
@@ -95,6 +100,16 @@ public class NativeRecorderImpl extends AbsCamcorder implements Camera1ManagerIm
                 if (VERBOSE) Log.d(TAG, "Started");
             }
         });
+
+        byte[] b = {0,0,0,1,43,25,64,120}; Log.d(TAG, "Lem= "+b.length);
+        try {
+            String s = new String(b, "UTF-8");
+            Log.d(TAG, "s="+s+" LENS: "+s.length());
+            byte[] b2 = s.getBytes("UTF-8");
+            Log.d(TAG, "equls= "+ Arrays.equals(b, b2));
+        } catch (UnsupportedEncodingException e) {
+            e.printStackTrace();
+        }
     }
 
     @Override

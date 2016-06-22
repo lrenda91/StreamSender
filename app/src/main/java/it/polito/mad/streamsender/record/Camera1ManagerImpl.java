@@ -28,8 +28,8 @@ public class Camera1ManagerImpl implements Camera1Manager {
         void onCameraCapturedFrame(byte[] frame);
     }
 
-    private static final String TAG = "Camera";
-    private static final boolean VERBOSE = false;
+    private static final String TAG = "CameraManager";
+    private static final boolean VERBOSE = true;
 
     private static final int sRatioWidth = 4;
     private static final int sRatioHeight = 3;
@@ -59,7 +59,7 @@ public class Camera1ManagerImpl implements Camera1Manager {
     private Camera mCamera;
     private Callback mCallback;
 
-    private List<Size> mSuitableSizes;
+    private List<Size> mSuitableSizes = new LinkedList<>();
     private int mSuitableSizesIndex = 0;
 
     public Camera1ManagerImpl(Context context, Callback callback){
@@ -71,8 +71,42 @@ public class Camera1ManagerImpl implements Camera1Manager {
     public void acquireCamera() {
         checkForCameraAcquisition(false);
 
-        mCamera = Camera.open(0);
-        if (VERBOSE) Log.d(TAG, "Camera acquired");
+        Camera.CameraInfo info = new Camera.CameraInfo();
+        int frontCameraId = -1, backCameraId = -1, targetCameraId;
+        for (int id = 0; id < Camera.getNumberOfCameras(); id ++){
+            Camera.getCameraInfo(id, info);
+            if ( (info.facing == Camera.CameraInfo.CAMERA_FACING_BACK)
+                    && (backCameraId < 0) ){
+                backCameraId = id;
+            }
+            else if ( (info.facing == Camera.CameraInfo.CAMERA_FACING_FRONT)
+                    && (frontCameraId < 0) ){
+                frontCameraId = id;
+            }
+        }
+        //just prefer back camera, if available, otherwise, prefer front camera
+        if (backCameraId >= 0){ targetCameraId = backCameraId; }
+        else if (frontCameraId >= 0){ targetCameraId = frontCameraId; }
+        else{
+            Log.e(TAG, "Impossible to acquire camera. Shutting down "+TAG);
+            throw new RuntimeException("Impossible to acquire camera. Shutting down "+TAG);
+        }
+        boolean isBackCamera = (targetCameraId == backCameraId);
+        Camera.getCameraInfo(targetCameraId, info);
+
+
+        try{
+            mCamera = Camera.open(targetCameraId);
+        }
+        catch(Exception exception){
+            Log.e(TAG, "Impossible to acquire camera. Shutting down "+TAG);
+            throw exception;
+        }
+
+
+
+        if (VERBOSE) Log.d(TAG, (isBackCamera ? "BACK" : "FRONT") +
+                " Camera["+targetCameraId+"] acquired");
 
         Camera.Parameters parameters = mCamera.getParameters();
         List<Integer> supportedPreviewFrameRates = parameters.getSupportedPreviewFrameRates();
@@ -82,11 +116,8 @@ public class Camera1ManagerImpl implements Camera1Manager {
 
         parameters.setPreviewFrameRate(chosenFrameRate);
 
-        Camera.CameraInfo info =
-                new Camera.CameraInfo();
-        Camera.getCameraInfo(1, info);
-        int rotation = ((Activity) mContext).getWindowManager().getDefaultDisplay()
-                .getRotation();
+        WindowManager wm = (WindowManager) mContext.getSystemService(Context.WINDOW_SERVICE);
+        final int rotation = wm.getDefaultDisplay().getRotation();
         int degrees = 0;
         switch (rotation) {
             case Surface.ROTATION_0:
@@ -102,14 +133,15 @@ public class Camera1ManagerImpl implements Camera1Manager {
                 degrees = 270;
                 break;
         }
-
         int result;
-        if (info.facing == Camera.CameraInfo.CAMERA_FACING_FRONT) {
-            result = (info.orientation + degrees) % 360;
-            result = (360 - result) % 360;  // compensate the mirror
-        } else {  // back-facing
+        if (isBackCamera){ // back-facing
             result = (info.orientation - degrees + 360) % 360;
         }
+        else{
+            result = (info.orientation + degrees) % 360;
+            result = (360 - result) % 360;  // compensate the mirror
+        }
+        if (VERBOSE) Log.d(TAG, "Orientation degrees: "+result);
         mCamera.setDisplayOrientation(result);
 
         //YV12
@@ -123,23 +155,15 @@ public class Camera1ManagerImpl implements Camera1Manager {
         mCamera.setParameters(parameters);
         if (VERBOSE) Util.logCameraPictureFormat(TAG, mImageFormat);
 
-        mSuitableSizes = new LinkedList<>();
         for (Camera.Size s : mCamera.getParameters().getSupportedPreviewSizes()){
             if ((s.width * sRatioHeight / sRatioWidth) == s.height){
                 mSuitableSizes.add(new Size(s.width, s.height));
             }
         }
-        Collections.sort(mSuitableSizes, new Comparator<Size>() {
-            @Override
-            public int compare(Size lhs, Size rhs) {
-                if (lhs.getWidth() > rhs.getWidth()) return 1;
-                if (lhs.getWidth() < rhs.getWidth()) return -1;
-                if (lhs.getHeight() > rhs.getHeight()) return 1;
-                if (lhs.getHeight() < rhs.getHeight()) return -1;
-                return 0;
-            }
-        });
+        Collections.sort(mSuitableSizes);
         if (VERBOSE) Util.logCameraSizes(TAG, mSuitableSizes);
+
+        mBuffers = new byte[mNumOfBuffers][];
     }
 
     @Override
@@ -189,8 +213,8 @@ public class Camera1ManagerImpl implements Camera1Manager {
 
     @Override
     public void setPreviewSurface(SurfaceHolder surfaceHolder) throws IOException {
-        WindowManager wm = (WindowManager) mContext.getSystemService(Context.WINDOW_SERVICE);
-        final int rotation = wm.getDefaultDisplay().getRotation();
+        //WindowManager wm = (WindowManager) mContext.getSystemService(Context.WINDOW_SERVICE);
+        //final int rotation = wm.getDefaultDisplay().getRotation();
         surfaceHolder.addCallback(new SurfaceHolder.Callback() {
             @Override
             public void surfaceCreated(SurfaceHolder holder) {
@@ -200,24 +224,24 @@ public class Camera1ManagerImpl implements Camera1Manager {
             public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
                 try {
                     checkForCameraAcquisition(true);
-                    /*mCamera.stopPreview();*/
-//                    switch (rotation) {
-//                        case Surface.ROTATION_0:
-//                            mCamera.setDisplayOrientation(90);
-//                            break;
-//                        case Surface.ROTATION_270:
-//                            mCamera.setDisplayOrientation(180);
-//                            break;
-//                        case Surface.ROTATION_90:
-//                        case Surface.ROTATION_180:
-//                            break;
-//                    }
+                    /*mCamera.stopPreview();
+                    switch (rotation) {
+                        case Surface.ROTATION_0:
+                            mCamera.setDisplayOrientation(90);
+                            break;
+                        case Surface.ROTATION_270:
+                            mCamera.setDisplayOrientation(180);
+                            break;
+                        case Surface.ROTATION_90:
+                        case Surface.ROTATION_180:
+                            break;
+                    }*/
                     mCamera.setPreviewDisplay(holder);
-                    mCamera.setDisplayOrientation(90);
+                    //mCamera.setDisplayOrientation(90);
                     mCamera.startPreview();
 
                 } catch (IOException e) {
-
+                    Log.e(TAG, e.getClass().getName() + ": " + e.getMessage());
                 }
             }
 
@@ -277,7 +301,9 @@ public class Camera1ManagerImpl implements Camera1Manager {
             Log.w(TAG, "Not integer size: " + bytesPerPixel);
         }
         mCurrentBuffersSize = (int) bufferSize;
-        mBuffers = new byte[mNumOfBuffers][(int)bufferSize];
+        for (int idx = 0; idx < mNumOfBuffers; idx++){
+            mBuffers[idx] = new byte[(int)bufferSize];
+        }
         if (VERBOSE) Log.d(TAG, "new preview size=("+width+","+height+") ; Buffers size= "+ bufferSize);
     }
 

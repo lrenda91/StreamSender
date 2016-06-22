@@ -1,6 +1,7 @@
 package it.polito.mad.streamsender.net;
 
 import android.util.Base64;
+import android.util.Log;
 
 import org.json.JSONArray;
 import org.json.JSONException;

@@ -16,10 +16,18 @@ import android.os.Build;
 import android.telephony.TelephonyManager;
 import android.util.Log;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.regex.Pattern;
+import java.util.zip.DataFormatException;
+import java.util.zip.Deflater;
+import java.util.zip.DeflaterOutputStream;
+import java.util.zip.GZIPOutputStream;
+import java.util.zip.Inflater;
 
 import it.polito.mad.streamsender.encoding.Params;
 import it.polito.mad.streamsender.record.Size;

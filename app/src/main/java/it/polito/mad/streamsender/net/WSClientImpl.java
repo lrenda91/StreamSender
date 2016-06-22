@@ -183,7 +183,7 @@ public class WSClientImpl extends WebSocketAdapter implements WSClient, Encoding
     public void sendStreamBytes(final VideoChunks.Chunk chunk){
         try {
             JSONObject obj = JSONMessageFactory.createStreamMessage(chunk);
-            obj.put("num",(cont++));
+            //obj.put("num",(cont++));
             //Log.d(TAG, "seq# -> "+cont);
             String text = obj.toString();
             totalBytesToSend.addAndGet(text.length());
